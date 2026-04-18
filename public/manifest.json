@@ -1,0 +1,22 @@
+{
+    "name": "Baliou Padra",
+    "short_name": "BaliouPadra",
+    "description": "Plateforme de la Fondation Cheikh Yacouba Sylla",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#146332",
+    "theme_color": "#146332",
+    "icons": [
+        {
+            "src": "https://ogcdvsrkpbjlndjmfzig.supabase.co/storage/v1/object/public/photos-membres/logo.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "https://ogcdvsrkpbjlndjmfzig.supabase.co/storage/v1/object/public/photos-membres/logo.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

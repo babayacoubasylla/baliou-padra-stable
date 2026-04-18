@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-focys-scroll {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 20s linear infinite;
+}
+
+/* Taille du texte responsive pour le bandeau animé */
+.animate-focys-scroll span {
+  font-size: 0.75rem;
+  /* text-sm - 12px sur mobile */
+  font-weight: 900;
+}
+
+@media (min-width: 768px) {
+  .animate-focys-scroll span {
+    font-size: 1.25rem;
+    /* text-xl - 20px sur desktop */
+  }
+}
+
+/* Amélioration de la performance sur mobile */
+@media (max-width: 768px) {
+  .animate-focys-scroll {
+    animation-duration: 15s;
+    /* Animation plus rapide sur mobile */
+  }
+}
+
+/* Style de sélection global */
+::selection {
+  background-color: black !important;
+  color: white !important;
+}
+
+::-moz-selection {
+  background-color: black !important;
+  color: white !important;
+}
