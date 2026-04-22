@@ -18,13 +18,20 @@ export default function LoginPage() {
 
             if (data.user) {
                 const { data: p } = await supabase.from('membres').select('role').eq('user_id', data.user.id).maybeSingle();
-                const role = p?.role;
+                const role = p?.role || 'membre';
 
-                if (role === 'super_admin') router.push('/admin-systeme');
-                else if (role === 'agent_civil') router.push('/etat-civil');
-                else if (role === 'agent_rh') router.push('/annuaire');
-                else if (role === 'baliou_padra') router.push('/admin-central');
-                else router.push('/dashboard');
+                if (role === 'super_admin') {
+                    router.push('/admin-systeme');
+                } else if (role === 'agent_civil') {
+                    router.push('/etat-civil');
+                } else if (role === 'baliou_padra') {
+                    router.push('/admin-central');
+                } else if (role === 'chef_gen' || role === 'tresorier_gen') {
+                    router.push('/generation');
+                } else {
+                    // POUR TOUT LE MONDE : Accès direct au profil
+                    router.push('/profil');
+                }
             }
         } catch (err: any) {
             alert("Erreur : Identifiants incorrects.");

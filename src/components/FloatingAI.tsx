@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 export default function FloatingAI() {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([
-        { role: 'ai', content: 'Komakhou ! Je suis l’assistant Baliou Padra. Comment puis-je vous aider ?' }
+        { role: 'ai', content: 'Komakhou ! Je suis l\'assistant Baliou Padra. Comment puis-je vous aider ?' }
     ]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
@@ -82,8 +82,8 @@ export default function FloatingAI() {
                             type="text"
                             value={input}
                             onChange={e => setInput(e.target.value)}
-                            placeholder="Écrivez votre question ici..."
-                            className="w-full p-4 border-4 border-black rounded-2xl font-black text-black bg-white outline-none focus:bg-yellow-50 placeholder:text-gray-400"
+                            placeholder="Écrivez votre question..."
+                            className="w-full p-4 border-4 border-black rounded-2xl font-black text-black bg-white outline-none focus:bg-yellow-50 placeholder:text-black/40"
                         />
                         <button type="submit" className="w-full bg-black text-white py-3 rounded-xl font-black uppercase text-xs border-2 border-black hover:bg-[#146332] shadow-md transition-all">
                             Envoyer la question
