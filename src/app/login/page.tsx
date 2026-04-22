@@ -25,7 +25,7 @@ export default function LoginPage() {
                     .from('membres')
                     .select('role')
                     .eq('user_id', authData.user.id)
-                    .maybeSingle(); // <--- Changement CRUCIAL ici
+                    .maybeSingle();
 
                 if (profileError) throw profileError;
 
@@ -39,24 +39,21 @@ export default function LoginPage() {
                         role: 'membre',
                         est_valide: true
                     }]);
-                    router.push('/profil');
+                    router.push('/dashboard');
                     return;
                 }
 
-                // 4. Redirection selon le rôle
+                // 4. Redirection selon le rôle (Cerveau du login)
                 const role = profile.role;
 
                 if (role === 'super_admin') {
                     router.push('/admin-systeme');
+                } else if (role === 'baliou_padra') {
+                    router.push('/admin-central'); // <--- Ils iront ici
                 } else if (role === 'agent_civil') {
                     router.push('/etat-civil');
-                } else if (role === 'baliou_padra') {
-                    router.push('/admin-central');
-                } else if (role === 'chef_gen' || role === 'tresorier_gen') {
-                    router.push('/generation');
                 } else {
-                    // POUR TOUT LE MONDE : Accès direct au profil
-                    router.push('/profil');
+                    router.push('/dashboard');
                 }
             }
         } catch (err: any) {
