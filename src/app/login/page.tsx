@@ -12,13 +12,39 @@ export default function LoginPage() {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        try {
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) throw error;
 
-            if (data.user) {
-                const { data: p } = await supabase.from('membres').select('role').eq('user_id', data.user.id).maybeSingle();
-                const role = p?.role || 'membre';
+        try {
+            // 1. Authentification
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+            if (authError) throw authError;
+
+            if (authData.user) {
+                // 2. Recherche du profil (On utilise maybeSingle pour éviter l'erreur)
+                const { data: profile, error: profileError } = await supabase
+                    .from('membres')
+                    .select('role')
+                    .eq('user_id', authData.user.id)
+                    .maybeSingle(); // <--- Changement CRUCIAL ici
+
+                if (profileError) throw profileError;
+
+                // 3. Si le profil n'existe pas encore, on le crée en urgence
+                if (!profile) {
+                    console.log("Profil manquant, création automatique...");
+                    await supabase.from('membres').insert([{
+                        user_id: authData.user.id,
+                        email: email,
+                        nom_complet: email.split('@')[0],
+                        role: 'membre',
+                        est_valide: true
+                    }]);
+                    router.push('/profil');
+                    return;
+                }
+
+                // 4. Redirection selon le rôle
+                const role = profile.role;
 
                 if (role === 'super_admin') {
                     router.push('/admin-systeme');
@@ -34,7 +60,7 @@ export default function LoginPage() {
                 }
             }
         } catch (err: any) {
-            alert("Erreur : Identifiants incorrects.");
+            alert("Erreur de connexion : " + err.message);
         } finally {
             setLoading(false);
         }
