@@ -138,7 +138,7 @@ export default function RegistrationPage() {
       <div className="max-w-2xl mx-auto text-center mb-6 md:mb-10">
         <h1 className="text-3xl md:text-5xl font-black text-[#146332] tracking-tighter uppercase italic">Baliou N'Padra</h1>
         <p className="text-[10px] md:text-sm text-gray-500 font-bold uppercase tracking-widest mt-2">
-          Fondation Cheikh Yacouba Sylla
+          Communauté Cheikh Yacouba Sylla
         </p>
       </div>
 

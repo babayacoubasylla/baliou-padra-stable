@@ -55,7 +55,7 @@ export default function HistoirePage() {
             icone: "🚛",
             titre: "TRANSPORT",
             desc: "Flotte de transport et logistique",
-            contenu: "La communauté a développé un immense réseau de transport de marchandises et de personnes, reliant les zones de production agricole aux centres urbains, renforçant l'autonomie de la fondation."
+            contenu: "La communauté a développé un immense réseau de transport de marchandises et de personnes, reliant les zones de production agricole aux centres urbains, renforçant l'autonomie de la Communauté."
         }
     ];
 
@@ -66,7 +66,7 @@ export default function HistoirePage() {
                 {/* TITRE PRINCIPAL */}
                 <header className="mb-16 text-center">
                     <h1 className="text-4xl md:text-5xl font-black text-[#146332] uppercase italic tracking-tighter">Baliou N'Padra</h1>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs mt-2">Fondation Cheikh Yacouba Sylla</p>
+                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs mt-2">Communauté Cheikh Yacouba Sylla — Mémoire Vivante </p>
                 </header>
 
                 {/* FRISE CHRONOLOGIQUE */}

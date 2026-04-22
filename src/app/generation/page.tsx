@@ -49,10 +49,14 @@ export default function GenerationPage() {
             setMonProfil(p);
 
             // 2. Charger uniquement les membres de MA génération
+            //    EXCLURE les rôles techniques : agent_civil, agent_rh, super_admin
             const { data: m } = await supabase
                 .from('membres')
                 .select('*')
                 .eq('generation', p.generation)
+                .neq('role', 'super_admin')   // <--- CACHE LE SUPER ADMIN
+                .neq('role', 'agent_civil')   // <--- CACHE LES AGENTS ÉTAT CIVIL
+                .neq('role', 'agent_rh')      // <--- CACHE LES RH
                 .order('nom_complet');
             setMembresGen(m || []);
 

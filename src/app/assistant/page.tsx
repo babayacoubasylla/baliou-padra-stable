@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 export default function AssistantPage() {
-    const [messages, setMessages] = useState([{ role: 'ai', content: 'Salam ! Je suis l’assistant Baliou Padra. Posez-moi une question.' }]);
+    const [messages, setMessages] = useState([{ role: 'ai', content: 'Komakhou ! Je suis l’assistant Baliou Padra. Posez-moi une question.' }]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);

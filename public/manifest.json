@@ -1,7 +1,7 @@
 {
     "name": "Baliou Padra",
     "short_name": "BaliouPadra",
-    "description": "Plateforme de la Fondation Cheikh Yacouba Sylla",
+    "description": "Plateforme Numérique de la Communauté Cheikh Yacouba Sylla",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#146332",

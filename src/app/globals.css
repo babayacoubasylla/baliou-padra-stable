@@ -73,3 +73,17 @@ body {
   background-color: black !important;
   color: white !important;
 }
+
+/* Force l'écriture noire dans tous les champs de saisie du site */
+input,
+select,
+textarea {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+/* Améliore la visibilité du texte de remplacement (placeholder) */
+::placeholder {
+  color: #a0a0a0 !important;
+  opacity: 1;
+}
