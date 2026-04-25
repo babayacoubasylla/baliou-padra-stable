@@ -34,8 +34,8 @@ export default function TresorierDashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [user, setUser] = useState(null);
     const [generation, setGeneration] = useState(null);
-    const [membres, setMembres] = useState([]);
-    const [cotisations, setCotisations] = useState([]);
+    const [membres, setMembres] = useState<any[]>([]);
+    const [cotisations, setCotisations] = useState<any[]>([]);
     const [stats, setStats] = useState({
         totalSibity: 0,
         totalMensualite: 0,

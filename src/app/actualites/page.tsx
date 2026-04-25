@@ -8,7 +8,7 @@ import { Calendar, User, ArrowLeft, RefreshCw, Megaphone, Eye, Globe, Lock } fro
 export default function ActualitesPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [annonces, setAnnonces] = useState([]);
+    const [annonces, setAnnonces] = useState<any[]>([]);
     const [userRole, setUserRole] = useState(null);
     const [userGeneration, setUserGeneration] = useState(null);
     const router = useRouter();
@@ -66,7 +66,7 @@ export default function ActualitesPage() {
     const formatDate = (dateString: any) => {
         const date = new Date(dateString);
         const now = new Date();
-        const diff = now - date;
+        const diff = now.getTime() - date.getTime();
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
         if (days === 0) return "Aujourd'hui";

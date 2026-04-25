@@ -8,16 +8,16 @@ import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-reac
 export default function FinancePage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('budgets');
-    const [generations, setGenerations] = useState([]);
+    const [generations, setGenerations] = useState<any[]>([]);
     const [selectedGeneration, setSelectedGeneration] = useState("");
-    const [propositions, setPropositions] = useState([]);
+    const [propositions, setPropositions] = useState<any[]>([]);
     const [nouvelleProposition, setNouvelleProposition] = useState({
         generation_nom: "",
         annee: new Date().getFullYear(),
         montant_propose: "",
         description: ""
     });
-    const [cotisationsExtra, setCotisationsExtra] = useState([]);
+    const [cotisationsExtra, setCotisationsExtra] = useState<any[]>([]);
     const [nouvelleCotisationExtra, setNouvelleCotisationExtra] = useState({
         nom: "",
         description: "",
@@ -163,7 +163,7 @@ export default function FinancePage() {
         }
 
         const historique = [...cotisationsData, ...versementsCentrauxData].sort((a, b) =>
-            new Date(b.date_cotisation || b.date_versement) - new Date(a.date_cotisation || a.date_versement)
+            new Date(b.date_cotisation || b.date_versement).getTime() - new Date(a.date_cotisation || a.date_versement).getTime()
         ).slice(0, 20);
 
         const progression = objectif > 0 ? (collecteTotale / objectif) * 100 : 0;
