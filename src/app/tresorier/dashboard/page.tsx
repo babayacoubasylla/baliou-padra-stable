@@ -101,7 +101,7 @@ export default function TresorierDashboard() {
         setLoading(false);
     };
 
-    const loadGenerationData = async (generationNom) => {
+    const loadGenerationData = async (generationNom: any) => {
         const { data: genData } = await supabase
             .from('generations')
             .select('*')
@@ -114,7 +114,7 @@ export default function TresorierDashboard() {
         }
     };
 
-    const loadMembres = async (generationNom) => {
+    const loadMembres = async (generationNom: any) => {
         const { data } = await supabase
             .from('membres')
             .select('*')
@@ -125,7 +125,7 @@ export default function TresorierDashboard() {
         setMembres(data || []);
     };
 
-    const loadCotisations = async (generationNom) => {
+    const loadCotisations = async (generationNom: any) => {
         setRefreshing(true);
 
         // Récupérer les membres de la génération
@@ -161,7 +161,7 @@ export default function TresorierDashboard() {
         setRefreshing(false);
     };
 
-    const calculateStats = async (cotisationsData, membreIds) => {
+    const calculateStats = async (cotisationsData: any, membreIds: any) => {
         let totalSibity = 0;
         let totalMensualite = 0;
         const membresPayeurs = new Set();
@@ -192,7 +192,7 @@ export default function TresorierDashboard() {
         });
     };
 
-    const handleAjouterCotisation = async (e) => {
+    const handleAjouterCotisation = async (e: any) => {
         e.preventDefault();
 
         if (!formData.membre_id || !formData.montant) {
@@ -227,7 +227,7 @@ export default function TresorierDashboard() {
         await loadCotisations(user.generation);
     };
 
-    const handleSupprimerCotisation = async (cotisationId) => {
+    const handleSupprimerCotisation = async (cotisationId: any) => {
         if (!confirm("Êtes-vous sûr de vouloir supprimer cette cotisation ?")) return;
 
         const { error } = await supabase
@@ -243,7 +243,7 @@ export default function TresorierDashboard() {
         }
     };
 
-    const handleTypeChange = (type) => {
+    const handleTypeChange = (type: any) => {
         const typeInfo = typesCotisation.find(t => t.value === type);
         setFormData({
             ...formData,
@@ -252,17 +252,17 @@ export default function TresorierDashboard() {
         });
     };
 
-    const getMembreNom = (membreId) => {
+    const getMembreNom = (membreId: any) => {
         const membre = membres.find(m => m.id === membreId);
         return membre?.nom_complet || 'Inconnu';
     };
 
-    const formatMontant = (montant) => {
+    const formatMontant = (montant: any) => {
         return new Intl.NumberFormat('fr-FR').format(montant) + ' FCFA';
     };
 
     const exportCotisations = () => {
-        const data = cotisationsFiltered.map(c => ({
+        const data = cotisationsFiltered.map((c: any) => ({
             Date: new Date(c.date_cotisation).toLocaleDateString(),
             Membre: c.membres?.nom_complet || 'Inconnu',
             Type: c.type === 'sibity' ? 'Sibity' : 'Mensualité',
@@ -280,7 +280,7 @@ export default function TresorierDashboard() {
         URL.revokeObjectURL(url);
     };
 
-    const imprimerRecu = (cotisation) => {
+    const imprimerRecu = (cotisation: any) => {
         const recuHtml = `
             <html>
             <head>

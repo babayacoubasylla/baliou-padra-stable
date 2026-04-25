@@ -37,7 +37,7 @@ export default function ActualitesPage() {
         setLoading(false);
     };
 
-    const loadAnnonces = async (generation, role) => {
+    const loadAnnonces = async (generation: string | null, role: string | null) => {
         setRefreshing(true);
 
         let query = supabase
@@ -59,11 +59,11 @@ export default function ActualitesPage() {
         setRefreshing(false);
     };
 
-    const handleRefresh = async () => {
+    const handleRefresh = async (): Promise<void> => {
         await loadAnnonces(userGeneration, userRole);
     };
 
-    const formatDate = (dateString) => {
+    const formatDate = (dateString: any) => {
         const date = new Date(dateString);
         const now = new Date();
         const diff = now - date;

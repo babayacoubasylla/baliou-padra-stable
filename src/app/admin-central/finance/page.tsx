@@ -102,7 +102,7 @@ export default function FinancePage() {
         setCotisationsExtra(data || []);
     };
 
-    const loadFinanceData = async (generationNom) => {
+    const loadFinanceData = async (generationNom: any) => {
         const { data: budgetValide } = await supabase
             .from('propositions_budgetaires')
             .select('montant_propose')
@@ -179,7 +179,7 @@ export default function FinancePage() {
         });
     };
 
-    const handleCreateProposition = async (e) => {
+    const handleCreateProposition = async (e: any) => {
         e.preventDefault();
 
         const { error } = await supabase
@@ -208,7 +208,7 @@ export default function FinancePage() {
         await loadPropositions();
     };
 
-    const handleValiderProposition = async (propositionId) => {
+    const handleValiderProposition = async (propositionId: any) => {
         const { error } = await supabase
             .from('propositions_budgetaires')
             .update({ statut: 'valide', date_validation: new Date().toISOString() })
@@ -227,7 +227,7 @@ export default function FinancePage() {
         }
     };
 
-    const handleRejeterProposition = async (propositionId) => {
+    const handleRejeterProposition = async (propositionId: any) => {
         const { error } = await supabase
             .from('propositions_budgetaires')
             .update({ statut: 'rejete' })
@@ -242,7 +242,7 @@ export default function FinancePage() {
         await loadPropositions();
     };
 
-    const handleAccepterNegociation = async (propositionId, nouveauMontant) => {
+    const handleAccepterNegociation = async (propositionId: any, nouveauMontant: any) => {
         const { error } = await supabase
             .from('propositions_budgetaires')
             .update({
@@ -263,7 +263,7 @@ export default function FinancePage() {
         }
     };
 
-    const handleMaintenirProposition = async (propositionId) => {
+    const handleMaintenirProposition = async (propositionId: any) => {
         const { error } = await supabase
             .from('propositions_budgetaires')
             .update({
@@ -279,7 +279,7 @@ export default function FinancePage() {
             await loadPropositions();
         }
     };
-    const handleCreateCotisationExtra = async (e) => {
+    const handleCreateCotisationExtra = async (e: any) => {
         e.preventDefault();
 
         const { error } = await supabase
@@ -310,7 +310,7 @@ export default function FinancePage() {
         await loadCotisationsExtra();
     };
 
-    const handleTerminerCotisation = async (cotisationId) => {
+    const handleTerminerCotisation = async (cotisationId: any) => {
         const { error } = await supabase
             .from('cotisations_extraordinaires')
             .update({ statut: 'terminee' })
@@ -325,13 +325,13 @@ export default function FinancePage() {
         await loadCotisationsExtra();
     };
 
-    const handleGenerationChange = async (e) => {
+    const handleGenerationChange = async (e: any) => {
         const gen = e.target.value;
         setSelectedGeneration(gen);
         await loadFinanceData(gen);
     };
 
-    const formatMontant = (montant) => {
+    const formatMontant = (montant: any) => {
         if (!montant && montant !== 0) return '0 FCFA';
         return new Intl.NumberFormat('fr-FR').format(montant) + ' FCFA';
     };

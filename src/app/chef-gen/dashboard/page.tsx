@@ -99,7 +99,7 @@ export default function ChefGenDashboard() {
         setLoading(false);
     };
 
-    const loadAllData = async (generationNom, membreId) => {
+    const loadAllData = async (generationNom: any, membreId: any) => {
         const { data: membresData } = await supabase
             .from('membres')
             .select('*')
@@ -120,7 +120,7 @@ export default function ChefGenDashboard() {
         await calculateStats(membresData || [], membreId);
     };
 
-    const loadMesCotisations = async (membreId) => {
+    const loadMesCotisations = async (membreId: any) => {
         const { data: cotisations } = await supabase
             .from('cotisations')
             .select('*')
@@ -162,7 +162,7 @@ export default function ChefGenDashboard() {
         }
     };
 
-    const calculateStats = async (membresData, membreId) => {
+    const calculateStats = async (membresData: any, membreId: any) => {
         const membreIds = membresData.map(m => m.id);
         let totalSibity = 0;
         let totalMensualites = 0;
@@ -196,7 +196,7 @@ export default function ChefGenDashboard() {
         }));
     };
 
-    const handleValiderMembre = async (membreId) => {
+    const handleValiderMembre = async (membreId: any) => {
         const { error } = await supabase
             .from('membres')
             .update({ est_valide: true })
@@ -210,7 +210,7 @@ export default function ChefGenDashboard() {
         }
     };
 
-    const handleRejeterMembre = async (membreId) => {
+    const handleRejeterMembre = async (membreId: any) => {
         if (!confirm("Rejeter cette demande ?")) return;
 
         const { error } = await supabase
@@ -250,7 +250,7 @@ export default function ChefGenDashboard() {
         }
     };
 
-    const handleRetirerResponsable = async (membreId, nomMembre) => {
+    const handleRetirerResponsable = async (membreId: any, nomMembre: any) => {
         if (!confirm(`Retirer ${nomMembre} ?`)) return;
 
         const { error } = await supabase
@@ -353,7 +353,7 @@ export default function ChefGenDashboard() {
         );
     };
 
-    const getRoleBadge = (role) => {
+    const getRoleBadge = (role: any) => {
         switch (role) {
             case 'tresorier':
                 return <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-black">💰 Trésorier Titulaire</span>;
@@ -370,7 +370,7 @@ export default function ChefGenDashboard() {
         }
     };
 
-    const formatMontant = (montant) => {
+    const formatMontant = (montant: any) => {
         if (!montant && montant !== 0) return '0 FCFA';
         return new Intl.NumberFormat('fr-FR').format(montant) + ' FCFA';
     };
