@@ -1,82 +1,111 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
-export default function RegistrationPage() {
+export default function DashboardHub() {
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', nom: '', kah: '', tel: '', gen: 'Génération 1', ville: '' });
 
-  // --- FORCE LA REDIRECTION SI DÉJÀ CONNECTÉ ---
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        router.push('/profil');
-      }
-    };
-    checkUser();
-  }, [router]);
+    checkAuthAndRedirect();
+  }, []);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      // 1. Création du compte Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-      });
+  const checkAuthAndRedirect = async () => {
+    // Vérifier la session
+    const { data: { session } } = await supabase.auth.getSession();
 
-      if (authError) throw authError;
+    if (!session) {
+      router.push('/login');
+      return;
+    }
 
-      // 2. Création de la fiche membre (Liaison immédiate)
-      if (authData.user) {
-        const { error: dbError } = await supabase.from('membres').insert([{
-          user_id: authData.user.id,
-          email: form.email,
-          nom_complet: form.nom,
-          kah_tokho: form.kah,
-          telephone: form.tel,
-          generation: form.gen,
-          ville_residence: form.ville,
-          role: 'membre',
-          est_valide: true // On valide tout de suite
-        }]);
-        if (dbError) throw dbError;
-      }
+    // Récupérer le profil
+    const { data: profileData } = await supabase
+      .from('membres')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
 
-      alert("Inscription réussie ! Bienvenue dans la communauté.");
-      router.push('/profil');
+    setProfile(profileData);
+    setUser(session.user);
 
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setLoading(false);
+    const role = profileData?.role || 'membre';
+
+    // Redirection automatique selon le rôle
+    if (role === 'super_admin') {
+      router.push('/admin-systeme');
+    } else if (role === 'baliou_padra') {
+      router.push('/admin-central');
+    } else if (role === 'chef_gen') {
+      router.push('/chef-gen/dashboard');
+    } else if (role === 'tresorier') {
+      router.push('/tresorier/dashboard');
+    } else if (role === 'comite_com_gen') {
+      router.push('/comite-com-gen/dashboard');
+    } else {
+      setLoading(false); // Afficher le dashboard membre
     }
   };
 
-  return (
-    <main className="min-h-screen bg-slate-50 py-10 px-4 font-sans text-black">
-      <div className="max-w-2xl mx-auto text-center mb-10">
-        <h1 className="text-4xl font-black text-[#146332] uppercase italic">Baliou N'Padra</h1>
-        <p className="font-bold text-black border-b-2 border-black inline-block uppercase tracking-widest text-xs pb-1">Communauté Cheikh Yacouba Sylla</p>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700 mx-auto"></div>
+          <p className="mt-4 text-gray-500 font-bold">Chargement de votre espace...</p>
+        </div>
       </div>
+    );
+  }
 
-      <div className="max-w-xl mx-auto bg-white border-4 border-black rounded-[2.5rem] p-8 shadow-2xl">
-        <h2 className="text-2xl font-black uppercase mb-8 border-b-2 border-black pb-2 text-center">Créer mon compte</h2>
-        <form onSubmit={handleRegister} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input type="email" placeholder="Email" required className="p-4 border-2 border-black rounded-xl font-bold bg-white text-black" onChange={e => setForm({ ...form, email: e.target.value })} />
-            <input type="password" placeholder="Mot de passe" required className="p-4 border-2 border-black rounded-xl font-bold bg-white text-black" onChange={e => setForm({ ...form, password: e.target.value })} />
-          </div>
-          <input type="text" placeholder="Nom et Prénom" required className="w-full p-4 border-2 border-black rounded-xl font-bold bg-white text-black" onChange={e => setForm({ ...form, nom: e.target.value })} />
-          <input type="text" placeholder="Kah Tôkhô" required className="w-full p-4 border-2 border-black rounded-xl font-bold bg-white text-black" onChange={e => setForm({ ...form, kah: e.target.value })} />
-          <button type="submit" disabled={loading} className="w-full py-5 bg-[#146332] text-white font-black rounded-2xl border-2 border-black shadow-lg uppercase">
-            {loading ? "Chargement..." : "S'inscrire et Entrer"}
-          </button>
-        </form>
+  // Dashboard pour les membres standards
+  return (
+    <main className="min-h-screen bg-slate-50 p-4 md:p-12 text-black">
+      <div className="max-w-5xl mx-auto">
+        <header className="mb-12 border-b-4 border-black pb-6">
+          <h1 className="text-4xl font-black text-[#146332] uppercase italic">
+            Tableau de Bord
+          </h1>
+          <p className="font-bold text-gray-500 uppercase text-xs tracking-widest mt-2">
+            Bienvenue {profile?.nom_complet || user?.email?.split('@')[0]}
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Link href="/profil" className="bg-white border-4 border-black rounded-2xl p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)] transition-all">
+            <div className="text-4xl mb-3">👤</div>
+            <h2 className="font-black text-xl">Mon Profil</h2>
+            <p className="text-sm text-gray-600 mt-1">Consulter et modifier mes informations</p>
+          </Link>
+
+          <Link href="/annuaire" className="bg-white border-4 border-black rounded-2xl p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)] transition-all">
+            <div className="text-4xl mb-3">📇</div>
+            <h2 className="font-black text-xl">Annuaire</h2>
+            <p className="text-sm text-gray-600 mt-1">Voir les membres de la communauté</p>
+          </Link>
+
+          <Link href="/bibliotheque" className="bg-white border-4 border-black rounded-2xl p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)] transition-all">
+            <div className="text-4xl mb-3">📚</div>
+            <h2 className="font-black text-xl">Bibliothèque</h2>
+            <p className="text-sm text-gray-600 mt-1">Accès aux documents et archives</p>
+          </Link>
+
+          <Link href="/histoire" className="bg-white border-4 border-black rounded-2xl p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)] transition-all">
+            <div className="text-4xl mb-3">📜</div>
+            <h2 className="font-black text-xl">Histoire</h2>
+            <p className="text-sm text-gray-600 mt-1">Découvrir l'histoire de la communauté</p>
+          </Link>
+
+          <Link href="/finances" className="bg-white border-4 border-black rounded-2xl p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)] transition-all">
+            <div className="text-4xl mb-3">💰</div>
+            <h2 className="font-black text-xl">Mes Finances</h2>
+            <p className="text-sm text-gray-600 mt-1">Suivi de mes cotisations</p>
+          </Link>
+        </div>
       </div>
     </main>
   );

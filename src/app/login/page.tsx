@@ -2,62 +2,80 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const router = useRouter();
+
+    // Table de correspondance des rôles vers les URLs
+    const getRedirectUrl = (role: string): string => {
+        const routes: Record<string, string> = {
+            'super_admin': '/admin-systeme',
+            'baliou_padra': '/admin-central',
+            'agent_civil': '/etat-civil',
+            'agent_rh': '/annuaire',
+            'chef_gen': '/chef-gen/dashboard',
+            'tresorier': '/tresorier/dashboard',
+            'comite_com_gen': '/comite-com-gen/dashboard',
+            'comite_com_central': '/admin-central/communication',
+            'membre': '/profil'
+        };
+        return routes[role] || '/profil';
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setError('');
 
         try {
             // 1. Authentification
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
 
             if (authError) throw authError;
 
-            if (authData.user) {
-                // 2. Recherche du profil (On utilise maybeSingle pour éviter l'erreur)
-                const { data: profile, error: profileError } = await supabase
-                    .from('membres')
-                    .select('role')
-                    .eq('user_id', authData.user.id)
-                    .maybeSingle();
-
-                if (profileError) throw profileError;
-
-                // 3. Si le profil n'existe pas encore, on le crée en urgence
-                if (!profile) {
-                    console.log("Profil manquant, création automatique...");
-                    await supabase.from('membres').insert([{
-                        user_id: authData.user.id,
-                        email: email,
-                        nom_complet: email.split('@')[0],
-                        role: 'membre',
-                        est_valide: true
-                    }]);
-                    router.push('/dashboard');
-                    return;
-                }
-
-                // 4. Redirection selon le rôle (Cerveau du login)
-                const role = profile.role;
-
-                if (role === 'super_admin') {
-                    router.push('/admin-systeme');
-                } else if (role === 'baliou_padra') {
-                    router.push('/admin-central'); // <--- Ils iront ici
-                } else if (role === 'agent_civil') {
-                    router.push('/etat-civil');
-                } else {
-                    router.push('/dashboard');
-                }
+            if (!authData.user) {
+                throw new Error("Utilisateur non trouvé");
             }
+
+            // 2. Récupération du profil
+            const { data: profile, error: profileError } = await supabase
+                .from('membres')
+                .select('role, generation')
+                .eq('user_id', authData.user.id)
+                .maybeSingle();
+
+            if (profileError) {
+                console.error("Erreur récupération profil:", profileError);
+            }
+
+            // 3. Détermination du rôle
+            const role = profile?.role || 'membre';
+
+            // 4. URL de redirection
+            const redirectUrl = getRedirectUrl(role);
+
+            // 5. Logs pour débogage
+            console.log("═══════════════════════════════════");
+            console.log("🔐 CONNEXION UTILISATEUR");
+            console.log("📧 Email:", email);
+            console.log("🎭 Rôle détecté:", role);
+            console.log("📍 Redirection vers:", redirectUrl);
+            console.log("═══════════════════════════════════");
+
+            // 6. Redirection
+            router.push(redirectUrl);
+
         } catch (err: any) {
-            alert("Erreur de connexion : " + err.message);
+            console.error("❌ Erreur:", err);
+            setError(err.message || "Email ou mot de passe incorrect");
         } finally {
             setLoading(false);
         }
@@ -67,44 +85,67 @@ export default function LoginPage() {
         <main className="min-h-screen bg-[#146332] flex items-center justify-center p-4">
             <div className="max-w-md w-full bg-white border-4 border-black rounded-[2.5rem] p-10 shadow-[15px_15px_0px_0px_rgba(0,0,0,1)]">
                 <div className="text-center mb-10">
-                    <h1 className="text-4xl font-black text-[#146332] uppercase italic italic tracking-tighter">BALIOU PADRA</h1>
-                    <div className="h-1.5 w-20 bg-black mx-auto mt-2"></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mt-4 text-gray-400">Espace Privé Sécurisé</p>
+                    <h1 className="text-3xl font-black text-[#146332] uppercase italic tracking-tighter">
+                        BALIOU N'PADRA
+                    </h1>
+                    <div className="h-1.5 w-16 bg-black mx-auto mt-2"></div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mt-4 text-gray-400">
+                        Communauté Cheikh Yacouba Sylla
+                    </p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-6">
+                    {error && (
+                        <div className="bg-red-100 border-2 border-red-500 text-red-700 p-3 rounded-xl text-sm font-black text-center">
+                            {error}
+                        </div>
+                    )}
+
                     <div>
-                        <label className="block text-[10px] font-black uppercase mb-2 ml-1 text-black">Adresse Email</label>
+                        <label className="block text-[10px] font-black uppercase mb-2 ml-1 text-black">
+                            Adresse Email
+                        </label>
                         <input
                             type="email"
-                            placeholder="votre@email.com"
                             required
+                            placeholder="votre@email.com"
                             className="w-full p-4 border-4 border-black rounded-2xl font-black bg-white text-black outline-none focus:ring-4 focus:ring-[#39ff14]/20 transition-all"
+                            value={email}
                             onChange={e => setEmail(e.target.value)}
                         />
                     </div>
+
                     <div>
-                        <label className="block text-[10px] font-black uppercase mb-2 ml-1 text-black">Mot de passe</label>
+                        <label className="block text-[10px] font-black uppercase mb-2 ml-1 text-black">
+                            Mot de passe
+                        </label>
                         <input
                             type="password"
-                            placeholder="••••••••"
                             required
+                            placeholder="••••••••"
                             className="w-full p-4 border-4 border-black rounded-2xl font-black bg-white text-black outline-none focus:ring-4 focus:ring-[#39ff14]/20 transition-all"
+                            value={password}
                             onChange={e => setPassword(e.target.value)}
                         />
                     </div>
+
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-black text-white py-5 font-black text-xl rounded-2xl hover:bg-[#146332] transition-all uppercase italic shadow-xl active:scale-95 disabled:opacity-50"
+                        className="w-full bg-black text-white py-5 font-black text-xl rounded-2xl hover:bg-[#146332] transition-all uppercase italic shadow-xl disabled:opacity-50"
                     >
-                        {loading ? "VÉRIFICATION..." : "ENTRER"}
+                        {loading ? "CONNEXION..." : "ENTRER"}
                     </button>
                 </form>
 
-                <p className="mt-10 text-center font-black text-[9px] uppercase tracking-widest text-gray-400">
-                    ALLAH KANE — GNAMARIYE BATIYE — KABEHI TOKHË
-                </p>
+                <div className="mt-8 text-center border-t-2 border-gray-200 pt-6">
+                    <button
+                        onClick={() => router.push('/inscription')}
+                        className="text-[10px] font-black uppercase underline hover:text-[#146332]"
+                    >
+                        Créer un nouveau compte membre
+                    </button>
+                </div>
             </div>
         </main>
     );

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function DashboardRH() {
     const [membres, setMembres] = useState<any[]>([]);
@@ -78,9 +79,14 @@ export default function DashboardRH() {
 
             {/* HEADER */}
             <header className="mb-10 border-b-8 border-black pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-4xl font-black text-blue-700 uppercase italic">Gestion Emploi & Stats</h1>
-                    <p className="font-bold text-xs uppercase">Comité RH - Supervision Baliou Padra</p>
+                <div className="flex items-center gap-4">
+                    <Link href="/admin-central" className="bg-black text-white p-3 rounded-xl border-2 border-black hover:bg-white hover:text-black transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        🏠
+                    </Link>
+                    <div>
+                        <h1 className="text-4xl font-black text-blue-700 uppercase italic italic tracking-tighter">Gestion Emploi & Stats</h1>
+                        <p className="font-bold text-xs uppercase text-black/60">Comité RH - Supervision Baliou Padra</p>
+                    </div>
                 </div>
 
                 {/* Barre de recherche */}
@@ -138,9 +144,9 @@ export default function DashboardRH() {
                                     </td>
                                     <td className="p-6">
                                         <span className={`inline-block px-3 py-1 rounded-full text-[9px] border border-black uppercase font-black ${m.situation_emploi === "En quête d'emploi" ? "bg-red-100 text-red-700" :
-                                                m.situation_emploi === "Porteur de projet" ? "bg-yellow-100 text-yellow-700" :
-                                                    m.situation_emploi === "En emploi" ? "bg-green-100 text-green-700" :
-                                                        "bg-gray-100 text-gray-700"
+                                            m.situation_emploi === "Porteur de projet" ? "bg-yellow-100 text-yellow-700" :
+                                                m.situation_emploi === "En emploi" ? "bg-green-100 text-green-700" :
+                                                    "bg-gray-100 text-gray-700"
                                             }`}>
                                             {m.situation_emploi || "Non renseigné"}
                                         </span>
@@ -166,8 +172,8 @@ export default function DashboardRH() {
             {/* SI AUCUN RÉSULTAT */}
             {!chargement && membresFiltrés.length === 0 && (
                 <div className="text-center py-20 bg-white rounded-[3rem] shadow-inner border-4 border-dashed border-gray-300 mt-8">
-                    <span className="text-6xl block mb-4">🔍</span>
-                    <p className="text-xl font-bold text-gray-400">Aucun membre trouvé pour cette recherche.</p>
+                    <span className="text-6xl block mb-4 text-gray-500">🔍</span>
+                    <p className="text-xl font-bold text-gray-600">Aucun membre trouvé pour cette recherche.</p>
                 </div>
             )}
         </main>

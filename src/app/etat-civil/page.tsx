@@ -4,87 +4,89 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function GestionEtatCivil() {
-    const [verifiantAcces, setVerifiantAcces] = useState(true);
-    const [monRole, setMonRole] = useState<string | null>(null);
+export default function EtatCivilDashboard() {
+    const [loading, setLoading] = useState(true);
     const router = useRouter();
 
     useEffect(() => {
-        const checkAccess = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push('/login');
-                return;
-            }
+        checkAuth();
+    }, []);
 
-            const { data: p } = await supabase
-                .from('membres')
-                .select('role')
-                .eq('email', user.email)
-                .maybeSingle();
+    const checkAuth = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            router.push('/login');
+            return;
+        }
 
-            if (p && (p.role === 'agent_civil' || p.role === 'super_admin')) {
-                setMonRole(p.role);
-                setVerifiantAcces(false);
-            } else {
-                alert("Accès réservé au Bureau de l'État Civil.");
-                router.push('/dashboard');
-            }
-        };
-        checkAccess();
-    }, [router]);
+        const { data: profile } = await supabase
+            .from('membres')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
 
-    if (verifiantAcces) {
-        return <div className="min-h-screen bg-white flex items-center justify-center font-black uppercase text-orange-600 animate-pulse">VÉRIFICATION...</div>;
+        if (profile?.role !== 'agent_civil' && profile?.role !== 'super_admin') {
+            router.push('/dashboard');
+            return;
+        }
+
+        setLoading(false);
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <p className="text-2xl font-black text-black">Chargement...</p>
+            </div>
+        );
     }
 
     return (
         <main className="min-h-screen bg-slate-50 p-4 md:p-12 text-black font-sans">
             <div className="max-w-6xl mx-auto">
-                <header className="mb-12 border-b-8 border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                    <div>
-                        <h1 className="text-5xl font-black text-orange-600 uppercase italic tracking-tighter">Registre Civil</h1>
-                        <p className="font-bold text-sm mt-2">GESTION DES NAISSANCES, MARIAGES ET DÉCÈS</p>
-                    </div>
+                <header className="mb-12 border-b-8 border-black pb-4">
+                    <h1 className="text-5xl font-black text-orange-600 uppercase italic tracking-tighter">
+                        Registre Civil
+                    </h1>
+                    <p className="font-bold text-sm mt-2">GESTION DES NAISSANCES, MARIAGES ET DÉCÈS</p>
                 </header>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-
-                    {/* CARTE NAISSANCES - LIEN CORRIGÉ AU PLURIEL */}
-                    <div className="bg-white border-4 border-black p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_rgba(255,102,0,1)] text-center">
-                        <span className="text-6xl">👶</span>
-                        <h2 className="text-2xl font-black uppercase mt-4">Naissances</h2>
-                        <p className="text-xs font-bold text-gray-400 mt-2 mb-6">Enregistrer un nouvel enfant</p>
-                        <Link href="/etat-civil/naissances">
-                            <button className="w-full py-4 bg-black text-white font-black rounded-xl text-[10px] uppercase border-2 border-black hover:bg-orange-600 transition-colors shadow-lg">
+                    {/* Carte Naissances */}
+                    <Link href="/etat-civil/naissances">
+                        <div className="bg-white border-4 border-black p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_rgba(255,102,0,1)] text-center cursor-pointer hover:scale-105 transition-all">
+                            <span className="text-6xl">👶</span>
+                            <h2 className="text-2xl font-black uppercase mt-4">Naissances</h2>
+                            <p className="text-xs font-bold text-gray-400 mt-2 mb-6">Enregistrer un nouvel enfant</p>
+                            <div className="w-full py-4 bg-black text-white font-black rounded-xl text-[10px] uppercase text-center">
                                 OUVRIR LE REGISTRE
-                            </button>
-                        </Link>
-                    </div>
+                            </div>
+                        </div>
+                    </Link>
 
-                    {/* CARTE MARIAGES - LIEN CORRIGÉ AU PLURIEL */}
-                    <div className="bg-white border-4 border-black p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_rgba(0,102,255,1)] text-center">
-                        <span className="text-6xl">💍</span>
-                        <h2 className="text-2xl font-black uppercase mt-4">Mariages</h2>
-                        <p className="text-xs font-bold text-gray-400 mt-2 mb-6">Enregistrer une union</p>
-                        <Link href="/etat-civil/mariages">
-                            <button className="w-full py-4 bg-black text-white font-black rounded-xl text-[10px] uppercase border-2 border-black hover:bg-blue-600 transition-colors shadow-lg">
+                    {/* Carte Mariages */}
+                    <Link href="/etat-civil/mariages">
+                        <div className="bg-white border-4 border-black p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_rgba(0,102,255,1)] text-center cursor-pointer hover:scale-105 transition-all">
+                            <span className="text-6xl">💍</span>
+                            <h2 className="text-2xl font-black uppercase mt-4">Mariages</h2>
+                            <p className="text-xs font-bold text-gray-400 mt-2 mb-6">Enregistrer une union</p>
+                            <div className="w-full py-4 bg-black text-white font-black rounded-xl text-[10px] uppercase text-center">
                                 OUVRIR LE REGISTRE
-                            </button>
-                        </Link>
-                    </div>
+                            </div>
+                        </div>
+                    </Link>
 
-                    {/* CARTE DÉCÈS - LIEN CORRIGÉ AU PLURIEL */}
-                    <div className="bg-white border-4 border-black p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_rgba(255,0,0,1)] text-center">
-                        <span className="text-6xl">🕊️</span>
-                        <h2 className="text-2xl font-black uppercase mt-4">Décès</h2>
-                        <p className="text-xs font-bold text-gray-400 mt-2 mb-6">Mettre à jour le registre</p>
-                        <Link href="/etat-civil/deces">
-                            <button className="w-full py-4 bg-black text-white font-black rounded-xl text-[10px] uppercase border-2 border-black hover:bg-red-600 transition-colors shadow-lg">
+                    {/* Carte Décès */}
+                    <Link href="/etat-civil/deces">
+                        <div className="bg-white border-4 border-black p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_rgba(255,0,0,1)] text-center cursor-pointer hover:scale-105 transition-all">
+                            <span className="text-6xl">🕊️</span>
+                            <h2 className="text-2xl font-black uppercase mt-4">Décès</h2>
+                            <p className="text-xs font-bold text-gray-400 mt-2 mb-6">Mettre à jour le registre</p>
+                            <div className="w-full py-4 bg-black text-white font-black rounded-xl text-[10px] uppercase text-center">
                                 DÉCLARER
-                            </button>
-                        </Link>
-                    </div>
+                            </div>
+                        </div>
+                    </Link>
                 </div>
 
                 <div className="mt-12 bg-black text-white p-10 rounded-[3rem] flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl border-4 border-orange-600">

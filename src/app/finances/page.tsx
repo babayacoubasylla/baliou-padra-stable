@@ -1,280 +1,273 @@
 "use client";
-
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-export default function FinancesPage() {
-    const [membres, setMembres] = useState<any[]>([]);
-    const [cotisations, setCotisations] = useState<any[]>([]);
-    const [chargement, setChargement] = useState(true);
-
-    // État pour le formulaire d'ajout
-    const [nouveauPaiement, setNouveauPaiement] = useState({
-        membre_id: '',
-        montant: '',
-        type: 'Sibity Mensuelle',
-        mois: 'Janvier',
-        annee: 2025
+export default function FinancePage() {
+    const [loading, setLoading] = useState(true);
+    const [generations, setGenerations] = useState([]);
+    const [selectedGeneration, setSelectedGeneration] = useState("");
+    const [financeData, setFinanceData] = useState({
+        objectif_annuel: 0,
+        collecte_totale: 0,
+        progression: 0,
+        reste_atteindre: 0,
+        cotisations: [],
+        versements_centraux: []
     });
+    const router = useRouter();
 
     useEffect(() => {
-        fetchDonnees();
+        checkAuthAndLoadData();
     }, []);
 
-    async function fetchDonnees() {
-        setChargement(true);
-        try {
-            // Charger les membres pour la liste déroulante
-            const { data: m } = await supabase.from('membres').select('id, nom_complet, kah_tokho');
-
-            // Charger les cotisations avec les noms des membres (Jointure)
-            const { data: c } = await supabase
-                .from('cotisations')
-                .select(`
-          id,
-          montant,
-          type_cotisation,
-          mois,
-          annee,
-          date_paiement,
-          membres (
-            nom_complet,
-            kah_tokho
-          )
-        `)
-                .order('date_paiement', { ascending: false });
-
-            setMembres(m || []);
-            setCotisations(c || []);
-        } catch (error) {
-            console.error("Erreur de chargement:", error);
-        } finally {
-            setChargement(false);
+    const checkAuthAndLoadData = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            router.push('/login');
+            return;
         }
-    }
 
-    const enregistrerPaiement = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!nouveauPaiement.membre_id) return alert("Sélectionnez un membre");
-        if (!nouveauPaiement.montant) return alert("Entrez un montant");
+        const { data: profile } = await supabase
+            .from('membres')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
 
-        setChargement(true);
-        const { error } = await supabase.from('cotisations').insert([{
-            membre_id: nouveauPaiement.membre_id,
-            montant: parseFloat(nouveauPaiement.montant),
-            type_cotisation: nouveauPaiement.type,
-            mois: nouveauPaiement.mois,
-            annee: nouveauPaiement.annee
-        }]);
-
-        if (error) {
-            alert("Erreur : " + error.message);
-        } else {
-            alert("Paiement de la Sibity enregistré avec succès !");
-            fetchDonnees(); // Rafraîchir la liste
+        if (profile?.role !== 'baliou_padra' && profile?.role !== 'super_admin') {
+            router.push('/dashboard');
+            return;
         }
-        setChargement(false);
+
+        await loadGenerations();
+        setLoading(false);
     };
 
-    const totalCollecte = cotisations.reduce((acc, curr) => acc + Number(curr.montant), 0);
+    const loadGenerations = async () => {
+        // Liste par défaut (celle de ton inscription)
+        const defaultGens = [
+            "Génération Wassalah dramane",
+            "Génération Dramane konté",
+            "Génération kissima",
+            "Génération maramou basseyabané",
+            "Génération khadja bah baya",
+            "Génération antankhoulé passokhona",
+            "Génération Mamery",
+            "Génération makhadja baliou",
+            "Génération kissima bah",
+            "Génération tchamba",
+            "Diaspora"
+        ];
+
+        // Récupérer les générations réellement utilisées dans la base (membres et budgets)
+        const { data: membres } = await supabase
+            .from('membres')
+            .select('generation')
+            .not('generation', 'is', null);
+
+        const { data: budgets } = await supabase
+            .from('budgets_annuels')
+            .select('generation');
+
+        const dbGens = [...(membres?.map(m => m.generation) || []), ...(budgets?.map(b => b.generation) || [])];
+
+        // Fusionner les listes et supprimer les doublons pour avoir "tout les générations du projet"
+        const allUniqueGens = Array.from(new Set([...defaultGens, ...dbGens])).filter(Boolean);
+        setGenerations(allUniqueGens);
+
+        if (allUniqueGens.length > 0) {
+            setSelectedGeneration(allUniqueGens[0]);
+            await loadFinanceData(allUniqueGens[0]);
+        }
+    };
+
+    const loadFinanceData = async (generationNom) => {
+        const currentYear = new Date().getFullYear();
+
+        // 1. Récupérer le budget annuel
+        const { data: budget } = await supabase
+            .from('budgets_annuels')
+            .select('montant_prevu')
+            .eq('generation', generationNom)
+            .eq('annee', currentYear)
+            .maybeSingle();
+
+        const objectif = budget?.montant_prevu || 0;
+
+        // 2. Récupérer les membres de cette génération
+        const { data: membresGen } = await supabase
+            .from('membres')
+            .select('id')
+            .eq('generation', generationNom);
+
+        const membreIds = membresGen?.map(m => m.id) || [];
+        let collecteTotale = 0;
+        let cotisationsDetails = [];
+
+        // 3. Récupérer les cotisations
+        if (membreIds.length > 0) {
+            const { data: cotisations } = await supabase
+                .from('cotisations')
+                .select('montant, date_cotisation')
+                .in('membre_id', membreIds)
+                .order('date_cotisation', { ascending: false });
+
+            if (cotisations && cotisations.length > 0) {
+                collecteTotale = cotisations.reduce((sum, c) => sum + (c.montant || 0), 0);
+
+                const parMois = {};
+                cotisations.forEach(c => {
+                    if (c.date_cotisation) {
+                        const date = new Date(c.date_cotisation);
+                        const mois = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        parMois[mois] = (parMois[mois] || 0) + c.montant;
+                    }
+                });
+                cotisationsDetails = Object.entries(parMois).map(([mois, montant]) => ({
+                    mois,
+                    montant
+                }));
+            }
+        }
+
+        // 4. Récupérer les versements centraux
+        const { data: versements } = await supabase
+            .from('versements_centraux')
+            .select('montant, statut, date_versement')
+            .eq('generation', generationNom)
+            .order('date_versement', { ascending: false });
+
+        const progression = objectif > 0 ? (collecteTotale / objectif) * 100 : 0;
+        const resteAtteindre = Math.max(0, objectif - collecteTotale);
+
+        setFinanceData({
+            objectif_annuel: objectif,
+            collecte_totale: collecteTotale,
+            progression: Math.min(100, progression),
+            reste_atteindre: resteAtteindre,
+            cotisations: cotisationsDetails,
+            versements_centraux: versements || []
+        });
+    };
+
+    const handleGenerationChange = async (e) => {
+        const generationNom = e.target.value;
+        setSelectedGeneration(generationNom);
+        await loadFinanceData(generationNom);
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <p className="text-2xl font-black text-black">Chargement...</p>
+            </div>
+        );
+    }
 
     return (
-        <main className="min-h-screen bg-slate-50 p-4 md:p-10 font-sans">
-            {/* Style global pour la sélection en noir sur blanc */}
-            <style jsx global>{`
-        /* Style de sélection pour tout l'application */
-        ::selection {
-          background-color: black !important;
-          color: white !important;
-        }
-        
-        /* Pour Firefox */
-        ::-moz-selection {
-          background-color: black !important;
-          color: white !important;
-        }
-        
-        /* Style spécifique pour les tableaux */
-        table ::selection,
-        td ::selection,
-        th ::selection,
-        tbody ::selection,
-        tr ::selection {
-          background-color: black !important;
-          color: white !important;
-        }
-        
-        /* Style pour les champs de formulaire en noir */
-        select, input, textarea {
-          background-color: black !important;
-          color: white !important;
-          border-color: #333 !important;
-        }
-        
-        select option {
-          background-color: black !important;
-          color: white !important;
-        }
-        
-        /* Style pour le placeholder */
-        input::placeholder {
-          color: #999 !important;
-        }
-        
-        select:focus, input:focus, textarea:focus {
-          border-color: #22c55e !important;
-          outline: none !important;
-          box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2) !important;
-        }
-        
-        /* Pour les éléments de formulaire (select, input) */
-        select ::selection,
-        input ::selection,
-        textarea ::selection {
-          background-color: white !important;
-          color: black !important;
-        }
-        
-        /* Style pour le survol des lignes du tableau */
-        tbody tr {
-          transition: background-color 0.2s ease;
-        }
-        
-        tbody tr:hover {
-          background-color: #f3f4f6 !important;
-        }
-      `}</style>
-
+        <div className="min-h-screen bg-white p-6">
             <div className="max-w-7xl mx-auto">
-
-                <header className="mb-10">
-                    <h1 className="text-4xl font-black text-green-900 tracking-tighter uppercase">Gestion Financière</h1>
-                    <p className="text-gray-500 font-bold tracking-widest text-sm">Trésorerie Baliou N'Padra - Sibity & Cotisations</p>
-                </header>
-
-                {/* DASHBOARD */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-                    <div className="bg-green-700 text-white p-8 rounded-[2.5rem] shadow-2xl transform hover:scale-105 transition-transform">
-                        <p className="text-xs font-black uppercase tracking-widest opacity-70">Total Caisse Baliou N'Padra</p>
-                        <h2 className="text-5xl font-black mt-3">{totalCollecte.toLocaleString()} <span className="text-lg">CFA</span></h2>
-                    </div>
-
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100">
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Nombre de versements</p>
-                        <h2 className="text-5xl font-black text-slate-800 mt-3">{cotisations.length}</h2>
-                    </div>
+                {/* Header */}
+                <div className="mb-6">
+                    <Link href="/admin-central" className="inline-flex items-center gap-2 text-black font-black hover:text-[#146332] transition-colors mb-4">
+                        <span>←</span> Retour au tableau de bord
+                    </Link>
+                    <h1 className="text-4xl font-black text-[#146332] uppercase italic">
+                        GESTION FINANCIÈRE
+                    </h1>
+                    <div className="h-1 w-32 bg-black mt-2"></div>
+                    <p className="text-black/60 mt-2">Supervision des flux financiers par génération</p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                {/* Sélecteur de génération - AFFICHE TOUTE LA LISTE */}
+                <div className="bg-white border-4 border-black rounded-2xl p-6 mb-8">
+                    <label className="block text-black font-black mb-2">Sélectionner une génération</label>
+                    <select
+                        value={selectedGeneration}
+                        onChange={handleGenerationChange}
+                        className="w-full md:w-96 p-4 border-4 border-black rounded-2xl font-black text-black bg-white outline-none focus:bg-yellow-50 cursor-pointer"
+                    >
+                        {generations.map((gen, index) => (
+                            <option key={index} value={gen} className="text-black">
+                                {gen}
+                            </option>
+                        ))}
+                    </select>
+                </div>
 
-                    {/* FORMULAIRE */}
-                    <div className="lg:col-span-1 bg-white p-8 rounded-[3rem] shadow-2xl border border-green-50">
-                        <h3 className="text-xl font-black mb-8 text-slate-800 border-b pb-4">Nouveau Versement</h3>
-                        <form onSubmit={enregistrerPaiement} className="space-y-5">
-                            <div>
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Choisir le Membre</label>
-                                <select
-                                    className="w-full px-5 py-4 border-2 rounded-2xl font-bold transition-all"
-                                    onChange={(e) => setNouveauPaiement({ ...nouveauPaiement, membre_id: e.target.value })}
-                                >
-                                    <option value="">-- Liste des membres --</option>
-                                    {membres.map(m => (
-                                        <option key={m.id} value={m.id}>{m.nom_complet} ({m.kah_tokho})</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Montant (FCFA)</label>
-                                <input
-                                    type="number" required placeholder="5000"
-                                    className="w-full px-5 py-4 border-2 rounded-2xl font-bold"
-                                    onChange={(e) => setNouveauPaiement({ ...nouveauPaiement, montant: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">Mois</label>
-                                    <select
-                                        className="w-full px-5 py-4 border-2 rounded-2xl font-bold"
-                                        onChange={(e) => setNouveauPaiement({ ...nouveauPaiement, mois: e.target.value })}
-                                    >
-                                        {["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"].map(m => (
-                                            <option key={m} value={m}>{m}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">Année</label>
-                                    <input
-                                        type="number" defaultValue="2025"
-                                        className="w-full px-5 py-4 border-2 rounded-2xl font-bold"
-                                        onChange={(e) => setNouveauPaiement({ ...nouveauPaiement, annee: parseInt(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={chargement}
-                                className="w-full py-5 bg-green-700 text-white font-black rounded-2xl hover:bg-green-800 transition-all shadow-xl active:scale-95"
-                            >
-                                {chargement ? "Validation..." : "ENREGISTRER LA SIBITY"}
-                            </button>
-                        </form>
-                    </div>
-
-                    {/* LISTE DES TRANSACTIONS */}
-                    <div className="lg:col-span-2 bg-white p-8 rounded-[3rem] shadow-2xl border border-gray-100">
-                        <h3 className="text-xl font-black mb-8 text-slate-800 border-b pb-4">Historique des versements</h3>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] border-b">
-                                        <th className="py-4">Membre</th>
-                                        <th className="py-4">Période</th>
-                                        <th className="py-4 text-right">Montant</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {cotisations.map((c) => (
-                                        <tr key={c.id} className="hover:bg-gray-50 transition-colors group">
-                                            <td className="py-5">
-                                                <p className="font-black text-slate-900 group-hover:text-green-700 transition-colors">
-                                                    {c.membres?.nom_complet || 'Membre inconnu'}
-                                                </p>
-                                                <p className="text-[10px] text-blue-600 font-black uppercase tracking-wider">
-                                                    {c.membres?.kah_tokho}
-                                                </p>
-                                            </td>
-                                            <td className="py-5">
-                                                <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-500">
-                                                    {c.mois} {c.annee}
-                                                </span>
-                                            </td>
-                                            <td className="py-5 text-right">
-                                                <span className="font-black text-green-700 text-lg">
-                                                    {Number(c.montant).toLocaleString()} <span className="text-[10px]">CFA</span>
-                                                </span>
-                                                <p className="text-[9px] text-gray-300 italic">
-                                                    Le {new Date(c.date_paiement).toLocaleDateString()}
-                                                </p>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {cotisations.length === 0 && (
-                                <div className="text-center py-20 text-gray-300 font-bold uppercase tracking-widest">
-                                    Aucun versement enregistré
-                                </div>
-                            )}
+                {selectedGeneration && (
+                    <>
+                        {/* Cartes */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <FinanceCard title="Objectif annuel" value={`${financeData.objectif_annuel.toLocaleString()} FCFA`} icon="🎯" color="border-blue-500" />
+                            <FinanceCard title="Collecte totale" value={`${financeData.collecte_totale.toLocaleString()} FCFA`} icon="💰" color="border-green-500" />
+                            <FinanceCard title="Progression" value={`${financeData.progression.toFixed(1)}%`} icon="📊" color="border-purple-500" />
+                            <FinanceCard title="Reste à atteindre" value={`${financeData.reste_atteindre.toLocaleString()} FCFA`} icon="⚠️" color="border-orange-500" />
                         </div>
-                    </div>
 
-                </div>
+                        {/* Barre progression */}
+                        <div className="bg-white border-4 border-black rounded-2xl p-6 mb-8">
+                            <div className="flex justify-between mb-2">
+                                <span className="font-black text-black">Progression vers l'objectif</span>
+                                <span className="font-black text-black">{financeData.progression.toFixed(1)}%</span>
+                            </div>
+                            <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden border-2 border-black">
+                                <div className={`h-full ${financeData.progression < 50 ? 'bg-red-500' : financeData.progression < 75 ? 'bg-orange-500' : 'bg-green-500'}`} style={{ width: `${financeData.progression}%` }}></div>
+                            </div>
+                        </div>
+
+                        {/* Colonnes */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white border-4 border-black rounded-2xl p-6">
+                                <h2 className="text-xl font-black text-black mb-4">📅 Cotisations collectées</h2>
+                                {financeData.cotisations.length === 0 ? (
+                                    <p className="text-black/60 italic">Aucune cotisation enregistrée</p>
+                                ) : (
+                                    financeData.cotisations.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between border-b border-black/10 py-3">
+                                            <span className="font-black text-black">{item.mois}</span>
+                                            <span className="font-black text-green-600">{item.montant.toLocaleString()} FCFA</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            <div className="bg-white border-4 border-black rounded-2xl p-6">
+                                <h2 className="text-xl font-black text-black mb-4">🔄 Versements au Bureau Central</h2>
+                                {financeData.versements_centraux.length === 0 ? (
+                                    <p className="text-black/60 italic">Aucun versement enregistré</p>
+                                ) : (
+                                    financeData.versements_centraux.map((vers, idx) => (
+                                        <div key={idx} className="flex justify-between items-center border-b border-black/10 py-3">
+                                            <div>
+                                                <span className="font-black text-black">{new Date(vers.date_versement).toLocaleDateString()}</span>
+                                                <span className={`ml-2 text-xs px-2 py-1 rounded-full font-black ${vers.statut === 'valide' ? 'bg-green-100 text-green-800' : vers.statut === 'rejete' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                    {vers.statut || 'en attente'}
+                                                </span>
+                                            </div>
+                                            <span className="font-black text-blue-600">{vers.montant.toLocaleString()} FCFA</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
-        </main>
+        </div>
+    );
+}
+
+function FinanceCard({ title, value, icon, color }) {
+    return (
+        <div className={`bg-white border-4 border-black rounded-2xl p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] border-t-8 ${color}`}>
+            <div className="flex justify-between mb-3">
+                <span className="text-3xl">{icon}</span>
+                <span className="text-xs font-black px-2 py-1 rounded-full bg-black text-white">BP</span>
+            </div>
+            <p className="text-2xl font-black text-black break-words">{value}</p>
+            <p className="text-xs font-bold uppercase text-black/50 mt-1">{title}</p>
+        </div>
     );
 }

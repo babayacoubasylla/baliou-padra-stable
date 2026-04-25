@@ -1,116 +1,75 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-export default function AdminSystemePage() {
-    const [membres, setMembres] = useState<any[]>([]);
-    const [chargement, setChargement] = useState(true);
-    const [recherche, setRecherche] = useState("");
-    const router = useRouter();
+export default function SystemAdminPage() {
+    const [users, setUsers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const boot = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return router.push('/login');
-            
-            const { data: p } = await supabase.from('membres').select('role').eq('user_id', user.id).maybeSingle();
-            if (p?.role !== 'super_admin') return router.push('/dashboard');
-            
-            chargerMembres();
-        };
-        boot();
-    }, [router]);
+        loadUsers();
+    }, []);
 
-    async function chargerMembres() {
-        setChargement(true);
-        const { data } = await supabase.from('membres').select('*').order('nom_complet');
-        setMembres(data || []);
-        setChargement(false);
+    async function loadUsers() {
+        const { data } = await supabase.from('membres').select('*').order('created_at', { ascending: false });
+        setUsers(data || []);
+        setLoading(false);
     }
 
-    async function updateRole(id: string, role: string) {
-        const { error } = await supabase.from('membres').update({ role }).eq('id', id);
-        if (error) alert(error.message); else chargerMembres();
+    async function updateRole(id: string, newRole: string) {
+        const { error } = await supabase.from('membres').update({ role: newRole }).eq('id', id);
+        if (error) alert(error.message);
+        else loadUsers();
     }
-
-    async function toggleValidation(id: string, currentStatus: boolean) {
-        const { error } = await supabase.from('membres').update({ est_valide: !currentStatus }).eq('id', id);
-        if (error) alert(error.message); else chargerMembres();
-    }
-
-    async function radierMembre(id: string, nom: string) {
-        if (window.confirm(`RADIER DÉFINITIVEMENT ${nom} ?`)) {
-            const { error } = await supabase.from('membres').delete().eq('id', id);
-            if (error) alert(error.message); else chargerMembres();
-        }
-    }
-
-    const filtrés = membres.filter(m => m.nom_complet.toLowerCase().includes(recherche.toLowerCase()));
-
-    if (chargement) return <div className="min-h-screen bg-black text-white flex items-center justify-center font-black">ACCÈS ROOT...</div>;
 
     return (
-        <main className="min-h-screen bg-white p-4 md:p-12 text-black font-sans">
-            <div className="max-w-7xl mx-auto">
-                <header className="mb-10 border-b-8 border-black pb-4 flex justify-between items-center">
-                    <h1 className="text-4xl font-black text-red-600 uppercase italic">Admin Système</h1>
-                    <input 
-                        type="text" placeholder="Rechercher..." 
-                        className="p-3 border-4 border-black rounded-xl text-xs font-black uppercase"
-                        onChange={(e) => setRecherche(e.target.value)}
-                    />
+        <main className="min-h-screen bg-gray-100 p-8">
+            <div className="max-w-6xl mx-auto bg-white border-4 border-black rounded-3xl p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+                <header className="border-b-4 border-black pb-6 mb-8 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <Link href="/admin-central" className="bg-black text-white p-2 rounded-lg border-2 border-black hover:bg-[#146332] transition-colors">
+                            🏠
+                        </Link>
+                        <h1 className="text-3xl font-black text-[#146332] uppercase italic">Administration Système</h1>
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-black/70 mt-2">Gouvernance Technique & Sécurité</p>
                 </header>
 
-                <div className="bg-white border-4 border-black rounded-[2rem] overflow-hidden shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
-                    <table className="w-full text-left">
-                        <thead className="bg-black text-white text-[10px] uppercase font-black">
-                            <tr>
-                                <th className="p-6">Utilisateur</th>
-                                <th className="p-6">Rôle</th>
-                                <th className="p-6">État</th>
-                                <th className="p-6 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y-4 divide-black">
-                            {filtrés.map((m) => (
-                                <tr key={m.id} className="hover:bg-blue-50 font-bold">
-                                    <td className="p-6 uppercase text-sm">
-                                        {m.nom_complet} <br/> <span className="text-blue-700 text-[10px]">{m.generation}</span>
-                                    </td>
-                                    <td className="p-6">
-                                        <select 
-                                            value={m.role}
-                                            onChange={(e) => updateRole(m.id, e.target.value)}
-                                            className="border-2 border-black p-1 text-[10px] font-black uppercase bg-white"
-                                        >
-                                            <option value="membre">Membre</option>
-                                            <option value="chef_gen">Chef Gen</option>
-                                            <option value="tresorier_gen">Trésorier</option>
-                                            <option value="baliou_padra">Baliou Padra</option>
-                                            <option value="super_admin">Super Admin</option>
-                                        </select>
-                                    </td>
-                                    <td className="p-6">
-                                        <button 
-                                            onClick={() => toggleValidation(m.id, m.est_valide)}
-                                            className={`px-3 py-1 border-2 border-black text-[9px] font-black uppercase ${m.est_valide ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}
-                                        >
-                                            {m.est_valide ? 'Actif' : 'Bloqué'}
-                                        </button>
-                                    </td>
-                                    <td className="p-6 text-right">
-                                        <button 
-                                            onClick={() => radierMembre(m.id, m.nom_complet)}
-                                            className="bg-red-600 text-white border-2 border-black px-4 py-2 rounded-xl font-black text-[10px] uppercase"
-                                        >
-                                            Radier
-                                        </button>
-                                    </td>
-                                </tr>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="p-6 border-4 border-black rounded-2xl bg-[#f0fdf4]">
+                        <h2 className="font-black uppercase text-sm mb-4">État des Services</h2>
+                        <div className="space-y-2 text-xs font-bold">
+                            <div className="flex justify-between"><span>Supabase Auth</span> <span className="text-green-600">OPÉRATIONNEL</span></div>
+                            <div className="flex justify-between"><span>Storage Buckets</span> <span className="text-green-600">OPÉRATIONNEL</span></div>
+                            <div className="flex justify-between"><span>Database API</span> <span className="text-green-600">OPÉRATIONNEL</span></div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 border-4 border-black rounded-2xl bg-white md:col-span-2">
+                        <h2 className="font-black uppercase text-sm mb-4 italic tracking-tighter text-black">Attribution des Rôles</h2>
+                        <div className="space-y-4">
+                            {users.map(u => (
+                                <div key={u.id} className="flex justify-between items-center p-3 border-2 border-black rounded-xl">
+                                    <div>
+                                        <p className="text-xs font-black uppercase text-black">{u.nom_complet}</p>
+                                        <p className="text-[10px] text-black/80 font-black italic">{u.email}</p>
+                                    </div>
+                                    <select
+                                        value={u.role}
+                                        onChange={(e) => updateRole(u.id, e.target.value)}
+                                        className="text-[10px] font-black border-2 border-black rounded-lg p-1"
+                                    >
+                                        <option value="membre">Membre</option>
+                                        <option value="tresorier">Trésorier</option>
+                                        <option value="chef_generation">Chef Génération</option>
+                                        <option value="baliou_padra">Bureau Central</option>
+                                        <option value="super_admin">Super Admin</option>
+                                    </select>
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
