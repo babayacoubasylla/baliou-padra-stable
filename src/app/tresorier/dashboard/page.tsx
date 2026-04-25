@@ -406,24 +406,24 @@ export default function TresorierDashboard() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="bg-white border-4 border-black rounded-2xl p-5">
                         <div className="flex items-center gap-2 mb-2">
-                            <DollarSign size={18} className="text-purple-600" />
+                            <DollarSign size={18} className="text-black" />
                             <p className="text-xs font-black uppercase text-black/50">Total Sibity</p>
                         </div>
-                        <p className="text-xl font-black text-purple-600">{formatMontant(stats.totalSibity)}</p>
+                        <p className="text-xl font-black text-black">{formatMontant(stats.totalSibity)}</p>
                     </div>
                     <div className="bg-white border-4 border-black rounded-2xl p-5">
                         <div className="flex items-center gap-2 mb-2">
-                            <CreditCard size={18} className="text-blue-600" />
+                            <CreditCard size={18} className="text-black" />
                             <p className="text-xs font-black uppercase text-black/50">Total Mensualités</p>
                         </div>
-                        <p className="text-xl font-black text-blue-600">{formatMontant(stats.totalMensualite)}</p>
+                        <p className="text-xl font-black text-black">{formatMontant(stats.totalMensualite)}</p>
                     </div>
                     <div className="bg-white border-4 border-black rounded-2xl p-5">
                         <div className="flex items-center gap-2 mb-2">
-                            <Landmark size={18} className="text-green-600" />
+                            <Landmark size={18} className="text-black" />
                             <p className="text-xs font-black uppercase text-black/50">Collecte globale</p>
                         </div>
-                        <p className="text-xl font-black text-green-600">{formatMontant(stats.totalGlobal)}</p>
+                        <p className="text-xl font-black text-black">{formatMontant(stats.totalGlobal)}</p>
                     </div>
                     <div className="bg-white border-4 border-black rounded-2xl p-5">
                         <div className="flex items-center gap-2 mb-2">
@@ -537,15 +537,14 @@ export default function TresorierDashboard() {
                                             </td>
                                             <td className="p-3 font-black text-black">
                                                 {cotisation.membres?.nom_complet || 'Inconnu'}
-                                            </tr>
+                                            </td>
                                             <td className="p-3">
-                                                <span className={`text-xs px-2 py-1 rounded-full font-black ${
-                                                    cotisation.type === 'sibity' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                                                }`}>
+                                                <span className={`text-xs px-2 py-1 rounded-full font-black ${cotisation.type === 'sibity' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                                                    }`}>
                                                     {cotisation.type === 'sibity' ? '📿 Sibity' : '📅 Mensualité'}
                                                 </span>
                                             </td>
-                                            <td className="p-3 text-right font-black text-green-600">
+                                            <td className="p-3 text-right font-black text-black">
                                                 {formatMontant(cotisation.montant)}
                                             </td>
                                             <td className="p-3 text-center">
@@ -575,150 +574,150 @@ export default function TresorierDashboard() {
                                                         <X size={18} />
                                                     </button>
                                                 </div>
-                                             </td>
+                                            </td>
                                         </tr>
                                     ))}
-                            </tbody>
-                        </table>
+                                </tbody>
+                            </table>
                         </div>
                     )}
-            </div>
+                </div>
 
-            {/* Pied de page */}
-            <div className="mt-6 text-center">
-                <p className="text-xs text-black/40 font-black uppercase tracking-wider">
-                    Espace Trésorier — Génération {user?.generation}
-                </p>
-            </div>
-        </div>
-
-            {/* Modal Ajout Cotisation */ }
-    {
-        showAjoutModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6 shadow-[15px_15px_0px_0px_rgba(0,0,0,0.2)]">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-black text-black">💰 Nouvelle cotisation</h2>
-                        <button onClick={() => setShowAjoutModal(false)} className="text-black hover:text-red-500">
-                            <X size={24} />
-                        </button>
-                    </div>
-                    <form onSubmit={handleAjouterCotisation} className="space-y-4">
-                        <div>
-                            <label className="block text-black font-black mb-1">Membre *</label>
-                            <select
-                                value={formData.membre_id}
-                                onChange={(e) => setFormData({ ...formData, membre_id: e.target.value })}
-                                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
-                                required
-                            >
-                                <option value="">-- Sélectionner un membre --</option>
-                                {membres.map(m => (
-                                    <option key={m.id} value={m.id}>{m.nom_complet}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-black font-black mb-1">Type de cotisation *</label>
-                            <select
-                                value={formData.type}
-                                onChange={(e) => handleTypeChange(e.target.value)}
-                                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
-                            >
-                                {typesCotisation.map(t => (
-                                    <option key={t.value} value={t.value}>{t.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-black font-black mb-1">Montant (FCFA) *</label>
-                            <input
-                                type="number"
-                                value={formData.montant}
-                                onChange={(e) => setFormData({ ...formData, montant: e.target.value })}
-                                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-black font-black mb-1">Date</label>
-                            <input
-                                type="date"
-                                value={formData.date_cotisation}
-                                onChange={(e) => setFormData({ ...formData, date_cotisation: e.target.value })}
-                                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-black font-black mb-1">Description (optionnelle)</label>
-                            <textarea
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
-                                rows={2}
-                                placeholder="Mois de janvier, Événement spécial..."
-                            />
-                        </div>
-                        <div className="flex gap-3 pt-4">
-                            <button type="button" onClick={() => setShowAjoutModal(false)} className="flex-1 bg-gray-200 py-3 rounded-xl font-black">Annuler</button>
-                            <button type="submit" className="flex-1 bg-black text-white py-3 rounded-xl font-black hover:bg-[#146332]">Enregistrer</button>
-                        </div>
-                    </form>
+                {/* Pied de page */}
+                <div className="mt-6 text-center">
+                    <p className="text-xs text-black/40 font-black uppercase tracking-wider">
+                        Espace Trésorier — Génération {user?.generation}
+                    </p>
                 </div>
             </div>
-        )
-    }
 
-    {/* Modal Détails Cotisation */ }
-    {
-        showDetailsModal && selectedCotisation && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-black text-black">📄 Détails de la cotisation</h2>
-                        <button onClick={() => setShowDetailsModal(false)} className="text-black hover:text-red-500">
-                            <X size={24} />
-                        </button>
-                    </div>
-                    <div className="space-y-3">
-                        <div className="border-b border-black/10 pb-2">
-                            <p className="text-xs font-black uppercase text-black/50">Date</p>
-                            <p className="font-black text-black">{new Date(selectedCotisation.date_cotisation).toLocaleDateString()}</p>
-                        </div>
-                        <div className="border-b border-black/10 pb-2">
-                            <p className="text-xs font-black uppercase text-black/50">Membre</p>
-                            <p className="font-black text-black">{getMembreNom(selectedCotisation.membre_id)}</p>
-                        </div>
-                        <div className="border-b border-black/10 pb-2">
-                            <p className="text-xs font-black uppercase text-black/50">Type</p>
-                            <p className="font-black text-black">{selectedCotisation.type === 'sibity' ? '📿 Sibity' : '📅 Mensualité'}</p>
-                        </div>
-                        <div className="border-b border-black/10 pb-2">
-                            <p className="text-xs font-black uppercase text-black/50">Montant</p>
-                            <p className="font-black text-green-600">{formatMontant(selectedCotisation.montant)}</p>
-                        </div>
-                        {selectedCotisation.description && (
-                            <div className="border-b border-black/10 pb-2">
-                                <p className="text-xs font-black uppercase text-black/50">Description</p>
-                                <p className="text-black/70">{selectedCotisation.description}</p>
+            {/* Modal Ajout Cotisation */}
+            {
+                showAjoutModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6 shadow-[15px_15px_0px_0px_rgba(0,0,0,0.2)]">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black text-black">💰 Nouvelle cotisation</h2>
+                                <button onClick={() => setShowAjoutModal(false)} className="text-black hover:text-red-500">
+                                    <X size={24} />
+                                </button>
                             </div>
-                        )}
+                            <form onSubmit={handleAjouterCotisation} className="space-y-4">
+                                <div>
+                                    <label className="block text-black font-black mb-1">Membre *</label>
+                                    <select
+                                        value={formData.membre_id}
+                                        onChange={(e) => setFormData({ ...formData, membre_id: e.target.value })}
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                        required
+                                    >
+                                        <option value="">-- Sélectionner un membre --</option>
+                                        {membres.map(m => (
+                                            <option key={m.id} value={m.id}>{m.nom_complet}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-black font-black mb-1">Type de cotisation *</label>
+                                    <select
+                                        value={formData.type}
+                                        onChange={(e) => handleTypeChange(e.target.value)}
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    >
+                                        {typesCotisation.map(t => (
+                                            <option key={t.value} value={t.value}>{t.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-black font-black mb-1">Montant (FCFA) *</label>
+                                    <input
+                                        type="number"
+                                        value={formData.montant}
+                                        onChange={(e) => setFormData({ ...formData, montant: e.target.value })}
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-black font-black mb-1">Date</label>
+                                    <input
+                                        type="date"
+                                        value={formData.date_cotisation}
+                                        onChange={(e) => setFormData({ ...formData, date_cotisation: e.target.value })}
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-black font-black mb-1">Description (optionnelle)</label>
+                                    <textarea
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                        rows={2}
+                                        placeholder="Mois de janvier, Événement spécial..."
+                                    />
+                                </div>
+                                <div className="flex gap-3 pt-4">
+                                    <button type="button" onClick={() => setShowAjoutModal(false)} className="flex-1 bg-gray-200 py-3 rounded-xl font-black">Annuler</button>
+                                    <button type="submit" className="flex-1 bg-black text-white py-3 rounded-xl font-black hover:bg-[#146332]">Enregistrer</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                    <div className="flex gap-3 pt-6">
-                        <button onClick={() => {
-                            imprimerRecu(selectedCotisation);
-                            setShowDetailsModal(false);
-                        }} className="flex-1 bg-black text-white py-3 rounded-xl font-black hover:bg-[#146332]">
-                            Imprimer le reçu
-                        </button>
-                        <button onClick={() => setShowDetailsModal(false)} className="flex-1 bg-gray-200 py-3 rounded-xl font-black">
-                            Fermer
-                        </button>
+                )
+            }
+
+            {/* Modal Détails Cotisation */}
+            {
+                showDetailsModal && selectedCotisation && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black text-black">📄 Détails de la cotisation</h2>
+                                <button onClick={() => setShowDetailsModal(false)} className="text-black hover:text-red-500">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <div className="space-y-3">
+                                <div className="border-b border-black/10 pb-2">
+                                    <p className="text-xs font-black uppercase text-black/50">Date</p>
+                                    <p className="font-black text-black">{new Date(selectedCotisation.date_cotisation).toLocaleDateString()}</p>
+                                </div>
+                                <div className="border-b border-black/10 pb-2">
+                                    <p className="text-xs font-black uppercase text-black/50">Membre</p>
+                                    <p className="font-black text-black">{getMembreNom(selectedCotisation.membre_id)}</p>
+                                </div>
+                                <div className="border-b border-black/10 pb-2">
+                                    <p className="text-xs font-black uppercase text-black/50">Type</p>
+                                    <p className="font-black text-black">{selectedCotisation.type === 'sibity' ? '📿 Sibity' : '📅 Mensualité'}</p>
+                                </div>
+                                <div className="border-b border-black/10 pb-2">
+                                    <p className="text-xs font-black uppercase text-black/50">Montant</p>
+                                    <p className="font-black text-green-600">{formatMontant(selectedCotisation.montant)}</p>
+                                </div>
+                                {selectedCotisation.description && (
+                                    <div className="border-b border-black/10 pb-2">
+                                        <p className="text-xs font-black uppercase text-black/50">Description</p>
+                                        <p className="text-black/70">{selectedCotisation.description}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex gap-3 pt-6">
+                                <button onClick={() => {
+                                    imprimerRecu(selectedCotisation);
+                                    setShowDetailsModal(false);
+                                }} className="flex-1 bg-black text-white py-3 rounded-xl font-black hover:bg-[#146332]">
+                                    Imprimer le reçu
+                                </button>
+                                <button onClick={() => setShowDetailsModal(false)} className="flex-1 bg-gray-200 py-3 rounded-xl font-black">
+                                    Fermer
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        )
-    }
+                )
+            }
         </div >
     );
 }
