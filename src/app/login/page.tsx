@@ -17,14 +17,15 @@ export default function LoginPage() {
             'super_admin': '/admin-systeme',
             'baliou_padra': '/admin-central',
             'agent_civil': '/etat-civil',
-            'agent_rh': '/annuaire',
+            'agent_rh': '/annuaire-pro',                          // ✅ CORRIGÉ
+            'responsable_bd': '/gestion-base-donnees',            // ✅ CORRIGÉ
             'chef_gen': '/chef-gen/dashboard',
             'tresorier': '/tresorier/dashboard',
             'comite_com_gen': '/comite-com-gen/dashboard',
             'comite_com_central': '/admin-central/communication',
-            'membre': '/profil'
+            'membre': '/'
         };
-        return routes[role] || '/profil';
+        return routes[role] || '/';
     };
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -53,11 +54,13 @@ export default function LoginPage() {
                 .maybeSingle();
 
             if (profileError) {
-                console.error("Erreur récupération profil:", profileError);
+                throw new Error("Impossible de vérifier vos droits d'accès. Erreur serveur.");
             }
 
             // 3. Détermination du rôle
             const role = profile?.role || 'membre';
+
+            console.log(`Vérification : ${email} -> Rôle: ${role}`);
 
             // 4. URL de redirection
             const redirectUrl = getRedirectUrl(role);

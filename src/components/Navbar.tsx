@@ -53,36 +53,45 @@ export default function Navbar() {
                 <div className="flex items-center space-x-2 text-[9px] md:text-[10px] uppercase">
 
                     {/* --- ACCÈS PUBLICS (Tout le monde) --- */}
-                    <Link href="/inscription" className={`px-2 py-1 ${isActive('/inscription') ? 'text-[#39ff14] underline' : ''}`}>inscription</Link>
                     <Link href="/actualites" className={`px-2 py-1 ${isActive('/actualites') ? 'text-[#39ff14] underline' : ''}`}>Actualités</Link>
                     <Link href="/histoire" className={`px-2 py-1 ${isActive('/histoire') ? 'text-[#39ff14] underline' : ''}`}>Histoire</Link>
                     <Link href="/bibliotheque" className={`px-2 py-1 ${isActive('/bibliotheque') ? 'text-[#39ff14] underline' : ''}`}>Bibliothèque</Link>
+                    {!session && (
+                        <Link href="/inscription" className={`px-2 py-1 ${isActive('/inscription') ? 'text-[#39ff14] underline' : ''}`}>inscription</Link>
+                    )}
 
                     {session && (
                         <>
-                            {/* --- ÉTAT CIVIL : Uniquement Agents et Superadmin --- */}
+                            {/* --- REGISTRES : Agent État Civil et Superadmin --- */}
                             {(role === 'agent_civil' || role === 'super_admin') && (
-                                <Link href="/etat-civil" className="bg-orange-600 px-3 py-2 rounded-lg border-2 border-white animate-pulse text-white">
+                                <Link href="/etat-civil" className="bg-orange-600 px-3 py-2 rounded-lg border-2 border-white text-white">
                                     État Civil
                                 </Link>
                             )}
 
-                            {/* --- EMPLOI & STATS : Uniquement RH, Baliou Padra et Superadmin --- */}
-                            {(role === 'agent_rh' || role === 'baliou_padra' || role === 'super_admin') && (
+                            {/* --- GESTION BD : Responsable BD et Superadmin --- */}
+                            {(role === 'responsable_bd' || role === 'super_admin') && (
+                                <Link href="/admin-central/audit" className="bg-purple-800 px-3 py-2 rounded-lg border-2 border-white text-white">
+                                    Gestion BD
+                                </Link>
+                            )}
+
+                            {/* --- DÉCISION & STATS : Baliou Padra, Responsable BD, Agent RH et Superadmin --- */}
+                            {(role === 'baliou_padra' || role === 'responsable_bd' || role === 'agent_rh' || role === 'super_admin') && (
                                 <Link href="/annuaire" className="bg-blue-600 px-3 py-2 rounded-lg border-2 border-white text-white">
-                                    Emploi & Stats
+                                    Décision & Stats
                                 </Link>
                             )}
 
                             {/* --- FINANCES : Uniquement Baliou Padra, Chefs/Trésoriers et Superadmin --- */}
-                            {(role === 'baliou_padra' || role === 'chef_gen' || role === 'tresorier_gen' || role === 'super_admin') && (
+                            {(role === 'baliou_padra' || role === 'chef_gen' || role === 'tresorier' || role === 'super_admin') && (
                                 <Link href="/finances" className={`px-2 py-1 ${isActive('/finances') ? 'text-[#39ff14] underline' : ''}`}>
                                     Finances
                                 </Link>
                             )}
 
                             {/* --- MA GÉNÉRATION : Uniquement Responsables de Gen --- */}
-                            {(role === 'chef_gen' || role === 'tresorier_gen') && (
+                            {(role === 'chef_gen' || role === 'tresorier') && (
                                 <Link href="/generation" className="text-yellow-400 px-2 py-1">Ma Gen</Link>
                             )}
 

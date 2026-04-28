@@ -12,6 +12,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://baliou-padra-stable.vercel.app'),
   title: {
     default: "BALIOU PADRA - Communauté Cheikh Yacouba Sylla",
     template: "%s | BALIOU PADRA"

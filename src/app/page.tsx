@@ -15,7 +15,6 @@ export default function DashboardHub() {
   }, []);
 
   const checkAuthAndRedirect = async () => {
-    // Vérifier la session
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
@@ -23,31 +22,44 @@ export default function DashboardHub() {
       return;
     }
 
-    // Récupérer le profil
-    const { data: profileData } = await supabase
+    const { data: profileData, error: profileError } = await supabase
       .from('membres')
-      .select('*')
+      .select('role, generation, nom_complet')
       .eq('user_id', session.user.id)
       .maybeSingle();
+
+    if (profileError) {
+      console.error("Erreur Hub Profil:", profileError);
+    }
 
     setProfile(profileData);
     setUser(session.user);
 
     const role = profileData?.role || 'membre';
 
-    // Redirection automatique selon le rôle
+    console.log("HUB - Utilisateur:", session.user.email);
+    console.log("HUB - Rôle détecté:", role);
+
     if (role === 'super_admin') {
       router.push('/admin-systeme');
     } else if (role === 'baliou_padra') {
       router.push('/admin-central');
+    } else if (role === 'agent_civil') {
+      router.push('/etat-civil');
+    } else if (role === 'agent_rh') {
+      router.push('/annuaire-pro');              // ✅ rh1@bp.com / rh2@bp.com
+    } else if (role === 'responsable_bd') {
+      router.push('/gestion-base-donnees');      // ✅ respbdys/1/2/3@bp.com
     } else if (role === 'chef_gen') {
       router.push('/chef-gen/dashboard');
     } else if (role === 'tresorier') {
       router.push('/tresorier/dashboard');
     } else if (role === 'comite_com_gen') {
       router.push('/comite-com-gen/dashboard');
+    } else if (role === 'comite_com_central') {
+      router.push('/admin-central/communication');
     } else {
-      setLoading(false); // Afficher le dashboard membre
+      setLoading(false);
     }
   };
 
@@ -62,7 +74,6 @@ export default function DashboardHub() {
     );
   }
 
-  // Dashboard pour les membres standards
   return (
     <main className="min-h-screen bg-slate-50 p-4 md:p-12 text-black">
       <div className="max-w-5xl mx-auto">
@@ -71,7 +82,7 @@ export default function DashboardHub() {
             Tableau de Bord
           </h1>
           <p className="font-bold text-gray-500 uppercase text-xs tracking-widest mt-2">
-            Bienvenue {profile?.nom_complet || user?.email?.split('@')[0]}
+            Bienvenue {profile?.nom_complet || user?.email?.split('@')[0]}{profile?.generation ? ` • ${profile.generation}` : ''}
           </p>
         </header>
 
