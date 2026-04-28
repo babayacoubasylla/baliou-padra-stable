@@ -53,6 +53,7 @@ export default function Navbar() {
                 <div className="flex items-center space-x-2 text-[9px] md:text-[10px] uppercase">
 
                     {/* --- ACCÈS PUBLICS (Tout le monde) --- */}
+                    <Link href="/inscription" className={`px-2 py-1 ${isActive('/inscription') ? 'text-[#39ff14] underline' : ''}`}>inscription</Link>
                     <Link href="/actualites" className={`px-2 py-1 ${isActive('/actualites') ? 'text-[#39ff14] underline' : ''}`}>Actualités</Link>
                     <Link href="/histoire" className={`px-2 py-1 ${isActive('/histoire') ? 'text-[#39ff14] underline' : ''}`}>Histoire</Link>
                     <Link href="/bibliotheque" className={`px-2 py-1 ${isActive('/bibliotheque') ? 'text-[#39ff14] underline' : ''}`}>Bibliothèque</Link>
