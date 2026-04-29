@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
 import Navbar from "@/components/Navbar";
 import FloatingAI from "@/components/FloatingAI";
+import RegisterSW from "@/components/RegisterSW";
+import InstallAppButton from "@/components/InstallAppButton";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -12,12 +15,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://baliou-padra-stable.vercel.app'),
+  metadataBase: new URL("https://baliou-padra-stable.vercel.app"),
   title: {
     default: "BALIOU PADRA - Communauté Cheikh Yacouba Sylla",
-    template: "%s | BALIOU PADRA"
+    template: "%s | BALIOU PADRA",
   },
-  description: "Plateforme Numérique de la Communauté Cheikh Yacouba Sylla - Fondation spirituelle et culturelle à Gagnoa, Côte d'Ivoire",
+  description:
+    "Plateforme Numérique de la Communauté Cheikh Yacouba Sylla - Fondation spirituelle et culturelle à Gagnoa, Côte d'Ivoire",
   manifest: "/manifest.json",
   applicationName: "Baliou Padra",
   keywords: [
@@ -29,7 +33,7 @@ export const metadata: Metadata = {
     "Côte d'Ivoire",
     "Zikhr",
     "Haradat",
-    "Spiritualité"
+    "Spiritualité",
   ],
   authors: [{ name: "Baliou Padra Community", url: "https://balioupadra.org" }],
   creator: "Baliou Padra Foundation",
@@ -48,12 +52,12 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [
-      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,
@@ -67,11 +71,12 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "BALIOU PADRA - Communauté Cheikh Yacouba Sylla",
-    description: "Plateforme Numérique de la Communauté Cheikh Yacouba Sylla - Fondation spirituelle et culturelle à Gagnoa",
+    description:
+      "Plateforme Numérique de la Communauté Cheikh Yacouba Sylla - Fondation spirituelle et culturelle à Gagnoa",
     type: "website",
     locale: "fr_FR",
     siteName: "Baliou Padra",
-    url: "https://balioupadra.org",
+    url: "https://baliou-padra-stable.vercel.app",
     images: [
       {
         url: "/og-image.png",
@@ -91,18 +96,14 @@ export const metadata: Metadata = {
   },
   verification: {
     google: "votre_code_de_verification_google",
-    // other: {
-    //   "yandex": "votre_code",
-    //   "facebook-domain-verification": "votre_code",
-    // },
   },
   category: "Religion & Spiritualité",
   classification: "Communauté Religieuse",
   referrer: "origin-when-cross-origin",
   alternates: {
-    canonical: "https://balioupadra.org",
+    canonical: "https://baliou-padra-stable.vercel.app",
     languages: {
-      "fr": "https://balioupadra.org/fr",
+      fr: "https://baliou-padra-stable.vercel.app",
     },
   },
 };
@@ -115,61 +116,87 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
-        {/* Meta tags supplémentaires pour SEO */}
+        {/* SEO géographique */}
         <meta name="geo.region" content="CI" />
         <meta name="geo.placename" content="Gagnoa" />
         <meta name="geo.position" content="6.1333;-5.9333" />
         <meta name="ICBM" content="6.1333, -5.9333" />
 
-        {/* Meta tags pour le responsive mobile */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes" />
-        <meta name="theme-color" content="#146332" />
+        {/* PWA / Application mobile */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Baliou Padra" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="format-detection" content="telephone=yes" />
         <meta name="msapplication-TileColor" content="#146332" />
+        <meta name="msapplication-TileImage" content="/icon-192.png" />
 
-        {/* Meta tags pour les réseaux sociaux */}
+        {/* Format detection */}
+        <meta name="format-detection" content="telephone=yes" />
+
+        {/* Réseaux sociaux */}
         <meta property="og:site_name" content="BALIOU PADRA" />
         <meta property="og:locale" content="fr_FR" />
         <meta property="og:type" content="website" />
 
-        {/* Meta tags pour Google */}
+        {/* Google */}
         <meta name="googlebot" content="index, follow" />
         <meta name="google" content="nositelinkssearchbox" />
 
-        {/* Lien vers le manifest */}
+        {/* Manifest PWA */}
         <link rel="manifest" href="/manifest.json" />
 
-        {/* Sitemap et RSS */}
-        <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+        {/* Sitemap */}
+        <link
+          rel="sitemap"
+          type="application/xml"
+          title="Sitemap"
+          href="/sitemap.xml"
+        />
 
-        {/* Favicon et icônes Apple */}
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        {/* Favicon et icônes */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="/favicon-32x32.png"
+        />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="16x16"
+          href="/favicon-16x16.png"
+        />
         <link rel="apple-touch-icon" href="/apple-icon.png" />
 
         {/* Préconnexion pour améliorer les performances */}
         <link rel="preconnect" href="https://supabase.co" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
 
         {/* DNS Prefetch */}
         <link rel="dns-prefetch" href="https://supabase.co" />
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
       </head>
+
       <body className="antialiased bg-slate-50">
-        {/* La Navbar apparaîtra en haut de chaque page */}
+        {/* Enregistrement du Service Worker PWA */}
+        <RegisterSW />
+
+        {/* Navbar globale */}
         <Navbar />
 
-        {/* Le contenu de chaque page s'affichera ici */}
-        <main>
-          {children}
-        </main>
+        {/* Contenu des pages */}
+        <main>{children}</main>
 
-        {/* L'ASSISTANT IA FLOATTANT - Présent sur TOUTES les pages */}
+        {/* Bouton d'installation de l'application */}
+        <InstallAppButton />
+
+        {/* Assistant IA flottant */}
         <FloatingAI />
       </body>
     </html>
