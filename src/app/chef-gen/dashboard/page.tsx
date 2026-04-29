@@ -38,14 +38,12 @@ export default function ChefGenDashboard() {
 
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNominationModal, setShowNominationModal] = useState(false);
-
     const [nominationType, setNominationType] = useState("tresorier");
     const [selectedMembre, setSelectedMembre] = useState<any>(null);
 
     const [selectedProposition, setSelectedProposition] = useState<any>(null);
     const [showNegociationModal, setShowNegociationModal] = useState(false);
     const [showRejetModal, setShowRejetModal] = useState(false);
-
     const [montantNegocie, setMontantNegocie] = useState("");
     const [commentaireAccept, setCommentaireAccept] = useState("");
     const [commentaireNegocie, setCommentaireNegocie] = useState("");
@@ -81,17 +79,13 @@ export default function ChefGenDashboard() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, profile?.generation]);
 
-    // ─────────────────────────────────────────────────────────────
-    // Helpers statut_validation
-    // ─────────────────────────────────────────────────────────────
     const clean = (value: any) => (value ?? "").toString().trim();
 
     const isChefRole = (role: any) =>
         ["chef_gen", "chef_generation"].includes(clean(role));
 
     const isMembreValide = (membre: any) => {
-        const statut = clean(membre?.statut_validation || "en_attente");
-        return statut === "valide";
+        return clean(membre?.statut_validation || "en_attente") === "valide";
     };
 
     const isMembreEnAttente = (membre: any) => {
@@ -121,9 +115,6 @@ export default function ChefGenDashboard() {
         return <span className="text-yellow-600 font-black">⏳ En attente</span>;
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // Auth + chargement
-    // ─────────────────────────────────────────────────────────────
     const checkAuthAndLoadData = async () => {
         const {
             data: { session },
@@ -141,7 +132,6 @@ export default function ChefGenDashboard() {
             .maybeSingle();
 
         if (profileError) {
-            console.error("Erreur profil chef génération:", profileError);
             alert("Erreur chargement profil : " + profileError.message);
             router.push("/profil");
             return;
@@ -171,7 +161,6 @@ export default function ChefGenDashboard() {
             .order("nom_complet", { ascending: true });
 
         if (error) {
-            console.error("Erreur chargement membres génération:", error);
             alert("Erreur chargement membres : " + error.message);
             setMembres([]);
             setDemandesAttente([]);
@@ -181,57 +170,57 @@ export default function ChefGenDashboard() {
         }
 
         const liste = membresData || [];
-
         setMembres(liste);
 
-        // Demandes en attente : membres simples, même génération, pas le chef lui-même
         const attente = liste.filter(
             (m) =>
                 isMembreEnAttente(m) &&
                 clean(m.role || "membre") === "membre" &&
                 m.id !== membreId
         );
+
         setDemandesAttente(attente);
 
-        const tres = liste.filter(
-            (m) =>
-                ["tresorier", "tresorier_adjoint"].includes(clean(m.role)) &&
-                m.id !== membreId
+        setTresoriers(
+            liste.filter(
+                (m) =>
+                    ["tresorier", "tresorier_adjoint"].includes(clean(m.role)) &&
+                    m.id !== membreId
+            )
         );
-        setTresoriers(tres);
 
-        const com = liste.filter(
-            (m) =>
-                ["comite_com_gen", "comite_com_adjoint"].includes(clean(m.role)) &&
-                m.id !== membreId
+        setComiteCom(
+            liste.filter(
+                (m) =>
+                    ["comite_com_gen", "comite_com_adjoint"].includes(clean(m.role)) &&
+                    m.id !== membreId
+            )
         );
-        setComiteCom(com);
 
-        await calculateStats(liste, membreId);
+        await calculateStats(liste);
     };
 
     const loadMesCotisations = async (membreId: any) => {
         const { data: cotisations, error } = await supabase
             .from("cotisations")
             .select("*")
-            .eq("membre_id", membreId)
-            .order("date_cotisation", { ascending: false });
+            .eq("membre_id", membreId);
 
         if (error) {
-            console.error("Erreur cotisations:", error);
+            console.warn("Erreur cotisations personnelles:", error.message);
             setMesCotisations([]);
             return;
         }
 
-        setMesCotisations(cotisations || []);
+        const liste = cotisations || [];
+        setMesCotisations(liste);
 
         let totalSibity = 0;
         let totalMensualite = 0;
 
-        cotisations?.forEach((c) => {
+        liste.forEach((c) => {
             if (c.type === "sibity") totalSibity += Number(c.montant || 0);
-            else if (c.type === "mensualite")
-                totalMensualite += Number(c.montant || 0);
+            else if (c.type === "mensualite") totalMensualite += Number(c.montant || 0);
         });
 
         setStats((prev) => ({
@@ -253,7 +242,7 @@ export default function ChefGenDashboard() {
             .eq("generation_nom", generation);
 
         if (error) {
-            console.error("Erreur propositions budget:", error);
+            console.warn("Erreur propositions budget:", error.message);
             setPropositionsBudget([]);
             return;
         }
@@ -261,18 +250,18 @@ export default function ChefGenDashboard() {
         setPropositionsBudget(data || []);
     };
 
-    const calculateStats = async (membresData: any[], membreId: any) => {
+    const calculateStats = async (membresData: any[]) => {
         const membreIds = membresData.map((m) => m.id);
         let totalSibity = 0;
         let totalMensualites = 0;
 
         if (membreIds.length > 0) {
-            const { data: cotisations } = await supabase
+            const { data: cotisations, error } = await supabase
                 .from("cotisations")
                 .select("montant, type")
                 .in("membre_id", membreIds);
 
-            if (cotisations) {
+            if (!error && cotisations) {
                 cotisations.forEach((c) => {
                     if (c.type === "sibity") totalSibity += Number(c.montant || 0);
                     else if (c.type === "mensualite")
@@ -296,37 +285,22 @@ export default function ChefGenDashboard() {
         }));
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // Validation / rejet membres
-    // ─────────────────────────────────────────────────────────────
     const updateStatutMembreGeneration = async (
         membreId: any,
         statut: "valide" | "rejete" | "en_attente"
     ) => {
-        // 1. On tente la fonction RPC sécurisée si elle existe
-        const { error: rpcError } = await supabase.rpc("valider_membre_generation", {
+        const { data, error } = await supabase.rpc("valider_membre_generation", {
             p_membre_id: Number(membreId),
             p_statut: statut,
         });
 
-        if (!rpcError) return null;
+        if (error) {
+            console.error("Erreur RPC valider_membre_generation:", error);
+            return error;
+        }
 
-        console.warn(
-            "RPC valider_membre_generation indisponible ou refusée, fallback update direct:",
-            rpcError
-        );
-
-        // 2. Fallback direct : utilise statut_validation, pas est_valide
-        const { error: updateError } = await supabase
-            .from("membres")
-            .update({
-                statut_validation: statut,
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", membreId)
-            .eq("generation", profile?.generation);
-
-        return updateError;
+        console.log("Membre mis à jour:", data);
+        return null;
     };
 
     const handleValiderMembre = async (membreId: any) => {
@@ -342,7 +316,11 @@ export default function ChefGenDashboard() {
     };
 
     const handleRejeterMembre = async (membreId: any) => {
-        if (!confirm("Rejeter cette demande ? Le compte ne sera pas supprimé, il sera marqué comme rejeté.")) {
+        if (
+            !confirm(
+                "Rejeter cette demande ? Le compte ne sera pas supprimé, il sera marqué comme rejeté."
+            )
+        ) {
             return;
         }
 
@@ -357,9 +335,6 @@ export default function ChefGenDashboard() {
         await loadAllData(profile.generation, profile.id);
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // Nomination responsables génération
-    // ─────────────────────────────────────────────────────────────
     const handleNommerResponsable = async () => {
         if (!selectedMembre) {
             alert("Veuillez choisir un membre.");
@@ -369,28 +344,19 @@ export default function ChefGenDashboard() {
         let nouveauRole = "";
 
         if (nominationType === "tresorier_titulaire") nouveauRole = "tresorier";
-        else if (nominationType === "tresorier_adjoint")
-            nouveauRole = "tresorier_adjoint";
-        else if (nominationType === "comite_com_titulaire")
-            nouveauRole = "comite_com_gen";
-        else if (nominationType === "comite_com_adjoint")
-            nouveauRole = "comite_com_adjoint";
+        else if (nominationType === "tresorier_adjoint") nouveauRole = "tresorier_adjoint";
+        else if (nominationType === "comite_com_titulaire") nouveauRole = "comite_com_gen";
+        else if (nominationType === "comite_com_adjoint") nouveauRole = "comite_com_adjoint";
 
         if (!nouveauRole) {
             alert("Type de nomination invalide.");
             return;
         }
 
-        const { error } = await supabase
-            .from("membres")
-            .update({
-                role: nouveauRole,
-                generation: profile.generation,
-                statut_validation: "valide",
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", selectedMembre)
-            .eq("generation", profile.generation);
+        const { error } = await supabase.rpc("nommer_responsable_generation", {
+            p_membre_id: Number(selectedMembre),
+            p_role: nouveauRole,
+        });
 
         if (error) {
             alert("Erreur: " + error.message);
@@ -406,15 +372,9 @@ export default function ChefGenDashboard() {
     const handleRetirerResponsable = async (membreId: any, nomMembre: any) => {
         if (!confirm(`Retirer ${nomMembre} de sa responsabilité ?`)) return;
 
-        const { error } = await supabase
-            .from("membres")
-            .update({
-                role: "membre",
-                statut_validation: "valide",
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", membreId)
-            .eq("generation", profile.generation);
+        const { error } = await supabase.rpc("retirer_responsable_generation", {
+            p_membre_id: Number(membreId),
+        });
 
         if (error) {
             alert("Erreur: " + error.message);
@@ -425,9 +385,6 @@ export default function ChefGenDashboard() {
         await loadAllData(profile.generation, profile.id);
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // Propositions budget
-    // ─────────────────────────────────────────────────────────────
     const handleAccepterProposition = async (propParam?: any) => {
         const prop = propParam || selectedProposition;
 
@@ -450,7 +407,7 @@ export default function ChefGenDashboard() {
             return;
         }
 
-        alert("✅ Proposition acceptée ! Le Bureau Central a été notifié.");
+        alert("✅ Proposition acceptée !");
         setSelectedProposition(null);
         setCommentaireAccept("");
         await loadPropositionsBudget(profile.generation);
@@ -482,7 +439,7 @@ export default function ChefGenDashboard() {
             return;
         }
 
-        alert("💬 Proposition de négociation envoyée au Bureau Central !");
+        alert("💬 Proposition de négociation envoyée !");
         setShowNegociationModal(false);
         setSelectedProposition(null);
         setMontantNegocie("");
@@ -515,7 +472,7 @@ export default function ChefGenDashboard() {
             return;
         }
 
-        alert("❌ Proposition rejetée. Le Bureau Central a été notifié.");
+        alert("❌ Proposition rejetée.");
         setShowRejetModal(false);
         setSelectedProposition(null);
         setCommentaireRejet("");
@@ -586,9 +543,6 @@ export default function ChefGenDashboard() {
         return new Intl.NumberFormat("fr-FR").format(Number(montant || 0)) + " FCFA";
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // Loading / garde génération
-    // ─────────────────────────────────────────────────────────────
     if (loading) {
         return (
             <div className="min-h-screen bg-white flex items-center justify-center">
@@ -622,7 +576,6 @@ export default function ChefGenDashboard() {
     return (
         <div className="min-h-screen bg-white p-6">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
                 <div className="mb-6">
                     <div className="flex justify-between items-start flex-wrap gap-4">
                         <div>
@@ -686,7 +639,6 @@ export default function ChefGenDashboard() {
                     </div>
                 </div>
 
-                {/* Cartes KPI */}
                 <div className="bg-[#146332] border-4 border-black rounded-2xl p-4 mb-6">
                     <div className="flex items-center gap-2 mb-3">
                         <Crown size={20} className="text-yellow-400" />
@@ -714,17 +666,13 @@ export default function ChefGenDashboard() {
                             </p>
                         </div>
                         <div className="bg-white/10 rounded-xl p-3 flex items-center justify-center">
-                            <button
-                                onClick={() => router.push("/finances")}
-                                className="text-sm font-black text-yellow-400 hover:underline"
-                            >
+                            <button onClick={() => router.push("/finances")} className="text-sm font-black text-yellow-400 hover:underline">
                                 Voir détails →
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Alertes */}
                 {demandesAttente.length > 0 && (
                     <div className="bg-yellow-50 border-4 border-yellow-500 rounded-2xl p-4 mb-6 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -738,16 +686,12 @@ export default function ChefGenDashboard() {
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => setActiveTab("validations")}
-                            className="bg-yellow-600 text-white px-4 py-2 rounded-xl font-black text-sm"
-                        >
+                        <button onClick={() => setActiveTab("validations")} className="bg-yellow-600 text-white px-4 py-2 rounded-xl font-black text-sm">
                             Voir
                         </button>
                     </div>
                 )}
 
-                {/* Onglets */}
                 <div className="flex flex-wrap gap-2 border-b-4 border-black mb-6 overflow-x-auto">
                     <button onClick={() => setActiveTab("overview")} className={`px-6 py-3 font-black uppercase text-sm flex items-center gap-2 ${activeTab === "overview" ? "bg-black text-white rounded-t-2xl" : "text-black"}`}>
                         <BarChart3 size={16} /> Vue d'ensemble
@@ -769,7 +713,6 @@ export default function ChefGenDashboard() {
                     </button>
                 </div>
 
-                {/* Vue d'ensemble */}
                 {activeTab === "overview" && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -863,7 +806,6 @@ export default function ChefGenDashboard() {
                     </div>
                 )}
 
-                {/* Validations */}
                 {activeTab === "validations" && (
                     <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
                         <div className="bg-black p-4">
@@ -899,7 +841,6 @@ export default function ChefGenDashboard() {
                     </div>
                 )}
 
-                {/* Finances */}
                 {activeTab === "tresorerie" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-white border-4 border-black rounded-2xl p-6">
@@ -929,7 +870,9 @@ export default function ChefGenDashboard() {
                                     <div key={c.id} className="flex justify-between py-2 border-b border-black/10">
                                         <div>
                                             <p className="text-sm font-black">{c.type === "sibity" ? "📿 Sibity" : "📅 Mensualité"}</p>
-                                            <p className="text-xs text-black/60">{new Date(c.date_cotisation).toLocaleDateString()}</p>
+                                            <p className="text-xs text-black/60">
+                                                {c.date_cotisation ? new Date(c.date_cotisation).toLocaleDateString() : ""}
+                                            </p>
                                         </div>
                                         <span className="font-black text-green-600">{formatMontant(c.montant)}</span>
                                     </div>
@@ -942,7 +885,6 @@ export default function ChefGenDashboard() {
                     </div>
                 )}
 
-                {/* Budget */}
                 {activeTab === "budget" && (
                     <div className="bg-white border-4 border-black rounded-2xl p-6">
                         <div className="flex justify-between items-center mb-4">
@@ -972,7 +914,7 @@ export default function ChefGenDashboard() {
                                     <div key={prop.id} className={`border-2 rounded-xl p-5 mb-4 ${isAccepte ? "border-green-500 bg-green-50" : isRejete ? "border-red-500 bg-red-50" : isNegociation ? "border-orange-500 bg-orange-50" : "border-yellow-500 bg-yellow-50"}`}>
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="text-sm text-black/60">Proposition du {new Date(prop.date_proposition).toLocaleDateString()}</p>
+                                                <p className="text-sm text-black/60">Proposition du {prop.date_proposition ? new Date(prop.date_proposition).toLocaleDateString() : ""}</p>
                                                 <p className="font-black text-black text-2xl">{formatMontant(montant)}</p>
                                                 <p className="text-xs text-black/40">Année {prop.annee}</p>
                                                 {prop.description && <p className="text-sm text-black/70 italic mt-2">{prop.description}</p>}
@@ -1010,21 +952,6 @@ export default function ChefGenDashboard() {
                                                 </button>
                                             </div>
                                         )}
-
-                                        {isNegociation && prop.montant_corrige && (
-                                            <div className="mt-4 p-3 bg-orange-100 rounded-xl">
-                                                <p className="font-black text-orange-800">Votre proposition : {formatMontant(prop.montant_corrige)}</p>
-                                                {prop.commentaire_chef && <p className="text-sm text-orange-700 mt-1">"{prop.commentaire_chef}"</p>}
-                                                <p className="text-xs text-orange-600 mt-2">En attente de validation par le Bureau Central</p>
-                                            </div>
-                                        )}
-
-                                        {isRejete && prop.commentaire_chef && (
-                                            <div className="mt-4 p-3 bg-red-100 rounded-xl">
-                                                <p className="font-black text-red-800">Motif du rejet :</p>
-                                                <p className="text-sm text-red-700">"{prop.commentaire_chef}"</p>
-                                            </div>
-                                        )}
                                     </div>
                                 );
                             })
@@ -1032,7 +959,6 @@ export default function ChefGenDashboard() {
                     </div>
                 )}
 
-                {/* Nomination */}
                 {activeTab === "nomination" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-white border-4 border-black rounded-2xl p-6">
@@ -1085,7 +1011,6 @@ export default function ChefGenDashboard() {
                     </div>
                 )}
 
-                {/* Membres */}
                 {activeTab === "membres" && (
                     <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
                         <div className="bg-black p-4">
@@ -1121,7 +1046,6 @@ export default function ChefGenDashboard() {
                 )}
             </div>
 
-            {/* Modal Nomination */}
             {showNominationModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6">
@@ -1152,7 +1076,6 @@ export default function ChefGenDashboard() {
                 </div>
             )}
 
-            {/* Modal Négociation */}
             {showNegociationModal && selectedProposition && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6">
@@ -1186,7 +1109,6 @@ export default function ChefGenDashboard() {
                 </div>
             )}
 
-            {/* Modal Rejet */}
             {showRejetModal && selectedProposition && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6">
