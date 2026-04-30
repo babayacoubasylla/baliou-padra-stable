@@ -1,273 +1,424 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
-export default function FinancePage() {
-    const [loading, setLoading] = useState(true);
-    const [generations, setGenerations] = useState([]);
-    const [selectedGeneration, setSelectedGeneration] = useState("");
-    const [financeData, setFinanceData] = useState({
-        objectif_annuel: 0,
-        collecte_totale: 0,
-        progression: 0,
-        reste_atteindre: 0,
-        cotisations: [],
-        versements_centraux: []
-    });
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+type Membre = {
+    id: number;
+    user_id: string;
+    nom_complet: string | null;
+    email: string | null;
+    generation: string | null;
+    role?: string | null;
+};
+
+type Cotisation = {
+    id: string;
+    membre_id: number;
+    montant: number | string | null;
+    type_cotisation?: string | null;
+    type?: string | null;
+    mois?: string | null;
+    annee?: number | null;
+    date_paiement?: string | null;
+    date_cotisation?: string | null;
+    notes?: string | null;
+    description?: string | null;
+    statut?: string | null;
+    created_at?: string | null;
+};
+
+export default function FinancesPage() {
     const router = useRouter();
 
+    const [loading, setLoading] = useState(true);
+    const [profile, setProfile] = useState<Membre | null>(null);
+    const [cotisations, setCotisations] = useState<Cotisation[]>([]);
+    const [filterType, setFilterType] = useState("tous");
+
+    const [stats, setStats] = useState({
+        total: 0,
+        sibity: 0,
+        mensualite: 0,
+        autres: 0,
+        nombrePaiements: 0,
+    });
+
     useEffect(() => {
-        checkAuthAndLoadData();
+        loadData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const checkAuthAndLoadData = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            router.push('/login');
-            return;
-        }
-
-        const { data: profile } = await supabase
-            .from('membres')
-            .select('role')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-
-        if (profile?.role !== 'baliou_padra' && profile?.role !== 'super_admin') {
-            router.push('/dashboard');
-            return;
-        }
-
-        await loadGenerations();
-        setLoading(false);
+    const cleanValue = (value: any): string => {
+        return (value ?? "").toString().trim();
     };
 
-    const loadGenerations = async () => {
-        // Liste par défaut (celle de ton inscription)
-        const defaultGens = [
-            "Génération Wassalah dramane",
-            "Génération Dramane konté",
-            "Génération kissima",
-            "Génération maramou basseyabané",
-            "Génération khadja bah baya",
-            "Génération antankhoulé passokhona",
-            "Génération Mamery",
-            "Génération makhadja baliou",
-            "Génération kissima bah",
-            "Génération tchamba",
-            "Diaspora"
-        ];
+    const numberValue = (value: any): number => {
+        const n = Number(value || 0);
+        return Number.isFinite(n) ? n : 0;
+    };
 
-        // Récupérer les générations réellement utilisées dans la base (membres et budgets)
-        const { data: membres } = await supabase
-            .from('membres')
-            .select('generation')
-            .not('generation', 'is', null);
+    const formatMontant = (montant: any): string => {
+        return new Intl.NumberFormat("fr-FR").format(numberValue(montant)) + " FCFA";
+    };
 
-        const { data: budgets } = await supabase
-            .from('budgets_annuels')
-            .select('generation');
+    const formatDate = (date?: string | null): string => {
+        if (!date) return "—";
 
-        const dbGens = [...(membres?.map(m => m.generation) || []), ...(budgets?.map(b => b.generation) || [])];
-
-        // Fusionner les listes et supprimer les doublons pour avoir "tout les générations du projet"
-        const allUniqueGens = Array.from(new Set([...defaultGens, ...dbGens])).filter(Boolean);
-        setGenerations(allUniqueGens);
-
-        if (allUniqueGens.length > 0) {
-            setSelectedGeneration(allUniqueGens[0]);
-            await loadFinanceData(allUniqueGens[0]);
+        try {
+            return new Date(date).toLocaleDateString("fr-FR");
+        } catch {
+            return "—";
         }
     };
 
-    const loadFinanceData = async (generationNom) => {
-        const currentYear = new Date().getFullYear();
+    const getTypeValue = (cotisation: Cotisation): string => {
+        return cleanValue(cotisation.type_cotisation || cotisation.type).toLowerCase();
+    };
 
-        // 1. Récupérer le budget annuel
-        const { data: budget } = await supabase
-            .from('budgets_annuels')
-            .select('montant_prevu')
-            .eq('generation', generationNom)
-            .eq('annee', currentYear)
-            .maybeSingle();
+    const getTypeLabel = (cotisation: Cotisation): string => {
+        const value = getTypeValue(cotisation);
 
-        const objectif = budget?.montant_prevu || 0;
+        if (value.includes("sibity")) return "📿 Sibity";
+        if (value.includes("mensualite") || value.includes("mensualité")) {
+            return "📅 Mensualité";
+        }
 
-        // 2. Récupérer les membres de cette génération
-        const { data: membresGen } = await supabase
-            .from('membres')
-            .select('id')
-            .eq('generation', generationNom);
+        return value ? `💰 ${value}` : "💰 Cotisation";
+    };
 
-        const membreIds = membresGen?.map(m => m.id) || [];
-        let collecteTotale = 0;
-        let cotisationsDetails = [];
+    const getCotisationDate = (cotisation: Cotisation): string | null => {
+        return (
+            cotisation.date_paiement ||
+            cotisation.date_cotisation ||
+            cotisation.created_at ||
+            null
+        );
+    };
 
-        // 3. Récupérer les cotisations
-        if (membreIds.length > 0) {
-            const { data: cotisations } = await supabase
-                .from('cotisations')
-                .select('montant, date_cotisation')
-                .in('membre_id', membreIds)
-                .order('date_cotisation', { ascending: false });
+    const getStatusBadge = (statut?: string | null) => {
+        const value = cleanValue(statut || "valide");
 
-            if (cotisations && cotisations.length > 0) {
-                collecteTotale = cotisations.reduce((sum, c) => sum + (c.montant || 0), 0);
+        if (value === "valide") {
+            return (
+                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-black uppercase">
+                    ✅ Validé
+                </span>
+            );
+        }
 
-                const parMois = {};
-                cotisations.forEach(c => {
-                    if (c.date_cotisation) {
-                        const date = new Date(c.date_cotisation);
-                        const mois = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                        parMois[mois] = (parMois[mois] || 0) + c.montant;
-                    }
-                });
-                cotisationsDetails = Object.entries(parMois).map(([mois, montant]) => ({
-                    mois,
-                    montant
-                }));
+        if (value === "en_attente") {
+            return (
+                <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-black uppercase">
+                    ⏳ En attente
+                </span>
+            );
+        }
+
+        if (value === "rejete") {
+            return (
+                <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-black uppercase">
+                    ❌ Rejeté
+                </span>
+            );
+        }
+
+        return (
+            <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-black uppercase">
+                {value}
+            </span>
+        );
+    };
+
+    const calculateStats = (list: Cotisation[]) => {
+        let sibity = 0;
+        let mensualite = 0;
+        let autres = 0;
+
+        list.forEach((c) => {
+            const type = getTypeValue(c);
+            const montant = numberValue(c.montant);
+
+            if (type.includes("sibity")) {
+                sibity += montant;
+            } else if (type.includes("mensualite") || type.includes("mensualité")) {
+                mensualite += montant;
+            } else {
+                autres += montant;
             }
-        }
+        });
 
-        // 4. Récupérer les versements centraux
-        const { data: versements } = await supabase
-            .from('versements_centraux')
-            .select('montant, statut, date_versement')
-            .eq('generation', generationNom)
-            .order('date_versement', { ascending: false });
-
-        const progression = objectif > 0 ? (collecteTotale / objectif) * 100 : 0;
-        const resteAtteindre = Math.max(0, objectif - collecteTotale);
-
-        setFinanceData({
-            objectif_annuel: objectif,
-            collecte_totale: collecteTotale,
-            progression: Math.min(100, progression),
-            reste_atteindre: resteAtteindre,
-            cotisations: cotisationsDetails,
-            versements_centraux: versements || []
+        setStats({
+            total: sibity + mensualite + autres,
+            sibity,
+            mensualite,
+            autres,
+            nombrePaiements: list.length,
         });
     };
 
-    const handleGenerationChange = async (e) => {
-        const generationNom = e.target.value;
-        setSelectedGeneration(generationNom);
-        await loadFinanceData(generationNom);
+    const loadData = async () => {
+        setLoading(true);
+
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) {
+            router.push("/login");
+            return;
+        }
+
+        const { data: membreData, error: membreError } = await supabase
+            .from("membres")
+            .select("id, user_id, nom_complet, email, generation, role")
+            .eq("user_id", session.user.id)
+            .maybeSingle();
+
+        if (membreError) {
+            console.error("Erreur profil:", membreError);
+            alert("Erreur chargement profil : " + membreError.message);
+            setLoading(false);
+            return;
+        }
+
+        if (!membreData) {
+            alert("Profil membre introuvable.");
+            router.push("/profil");
+            return;
+        }
+
+        setProfile(membreData);
+
+        /**
+         * IMPORTANT :
+         * Ta table cotisations.membre_id est BIGINT
+         * donc elle pointe vers membres.id.
+         */
+        const { data: cotisationsData, error: cotisationsError } = await supabase
+            .from("cotisations")
+            .select("*")
+            .eq("membre_id", membreData.id)
+            .order("date_paiement", { ascending: false });
+
+        if (cotisationsError) {
+            console.error("Erreur cotisations:", cotisationsError);
+            alert("Erreur chargement cotisations : " + cotisationsError.message);
+            setCotisations([]);
+            setLoading(false);
+            return;
+        }
+
+        const list = (cotisationsData || []) as Cotisation[];
+
+        setCotisations(list);
+        calculateStats(list);
+
+        setLoading(false);
     };
+
+    const cotisationsFiltrees = cotisations.filter((c) => {
+        if (filterType === "tous") return true;
+
+        const type = getTypeValue(c);
+
+        if (filterType === "sibity") return type.includes("sibity");
+
+        if (filterType === "mensualite") {
+            return type.includes("mensualite") || type.includes("mensualité");
+        }
+
+        if (filterType === "autres") {
+            return !type.includes("sibity") &&
+                !type.includes("mensualite") &&
+                !type.includes("mensualité");
+        }
+
+        return true;
+    });
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center">
-                <p className="text-2xl font-black text-black">Chargement...</p>
+            <div className="min-h-screen bg-white flex items-center justify-center text-black">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-14 w-14 border-4 border-[#146332] border-t-transparent mx-auto mb-4"></div>
+                    <p className="font-black text-xl">Chargement de mes finances...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-white p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-6">
-                    <Link href="/admin-central" className="inline-flex items-center gap-2 text-black font-black hover:text-[#146332] transition-colors mb-4">
-                        <span>←</span> Retour au tableau de bord
-                    </Link>
-                    <h1 className="text-4xl font-black text-[#146332] uppercase italic">
-                        GESTION FINANCIÈRE
-                    </h1>
-                    <div className="h-1 w-32 bg-black mt-2"></div>
-                    <p className="text-black/60 mt-2">Supervision des flux financiers par génération</p>
-                </div>
-
-                {/* Sélecteur de génération - AFFICHE TOUTE LA LISTE */}
-                <div className="bg-white border-4 border-black rounded-2xl p-6 mb-8">
-                    <label className="block text-black font-black mb-2">Sélectionner une génération</label>
-                    <select
-                        value={selectedGeneration}
-                        onChange={handleGenerationChange}
-                        className="w-full md:w-96 p-4 border-4 border-black rounded-2xl font-black text-black bg-white outline-none focus:bg-yellow-50 cursor-pointer"
+        <main className="min-h-screen bg-slate-50 p-4 md:p-10 text-black">
+            <div className="max-w-6xl mx-auto">
+                <header className="mb-10 border-b-4 border-black pb-6">
+                    <Link
+                        href="/profil"
+                        className="inline-flex items-center gap-2 text-sm font-black uppercase text-[#146332] mb-4"
                     >
-                        {generations.map((gen, index) => (
-                            <option key={index} value={gen} className="text-black">
-                                {gen}
-                            </option>
-                        ))}
-                    </select>
+                        ← Retour au profil
+                    </Link>
+
+                    <h1 className="text-4xl font-black uppercase italic text-[#146332]">
+                        Mes cotisations
+                    </h1>
+
+                    <p className="font-bold text-gray-500 mt-2">
+                        Historique personnel des paiements — {profile?.generation || "Génération non renseignée"}
+                    </p>
+                </header>
+
+                <div className="bg-green-50 border-4 border-[#146332] rounded-3xl p-6 mb-8">
+                    <h2 className="text-xl font-black text-[#146332] mb-2">
+                        {profile?.nom_complet || "Membre"}
+                    </h2>
+
+                    <p className="font-bold text-gray-600">{profile?.email}</p>
+
+                    <p className="font-black text-sm uppercase mt-2">
+                        Génération : {profile?.generation || "Non renseignée"}
+                    </p>
+
+                    <p className="text-xs text-gray-500 mt-4 font-bold">
+                        Confidentialité : seul vous, le trésorier de votre génération, le chef de votre génération et le Bureau Central peuvent consulter cet historique.
+                    </p>
                 </div>
 
-                {selectedGeneration && (
-                    <>
-                        {/* Cartes */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                            <FinanceCard title="Objectif annuel" value={`${financeData.objectif_annuel.toLocaleString()} FCFA`} icon="🎯" color="border-blue-500" />
-                            <FinanceCard title="Collecte totale" value={`${financeData.collecte_totale.toLocaleString()} FCFA`} icon="💰" color="border-green-500" />
-                            <FinanceCard title="Progression" value={`${financeData.progression.toFixed(1)}%`} icon="📊" color="border-purple-500" />
-                            <FinanceCard title="Reste à atteindre" value={`${financeData.reste_atteindre.toLocaleString()} FCFA`} icon="⚠️" color="border-orange-500" />
-                        </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <StatCard title="Total payé" value={formatMontant(stats.total)} icon="💰" />
+                    <StatCard title="Sibity" value={formatMontant(stats.sibity)} icon="📿" />
+                    <StatCard title="Mensualités" value={formatMontant(stats.mensualite)} icon="📅" />
+                    <StatCard title="Paiements" value={stats.nombrePaiements} icon="🧾" />
+                </div>
 
-                        {/* Barre progression */}
-                        <div className="bg-white border-4 border-black rounded-2xl p-6 mb-8">
-                            <div className="flex justify-between mb-2">
-                                <span className="font-black text-black">Progression vers l'objectif</span>
-                                <span className="font-black text-black">{financeData.progression.toFixed(1)}%</span>
-                            </div>
-                            <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden border-2 border-black">
-                                <div className={`h-full ${financeData.progression < 50 ? 'bg-red-500' : financeData.progression < 75 ? 'bg-orange-500' : 'bg-green-500'}`} style={{ width: `${financeData.progression}%` }}></div>
-                            </div>
-                        </div>
+                <div className="bg-white border-4 border-black rounded-2xl p-4 mb-6 flex flex-wrap gap-3">
+                    <button
+                        onClick={() => setFilterType("tous")}
+                        className={`px-5 py-2 rounded-xl border-2 border-black font-black uppercase text-xs ${filterType === "tous" ? "bg-black text-white" : "bg-white text-black"
+                            }`}
+                    >
+                        Tous
+                    </button>
 
-                        {/* Colonnes */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="bg-white border-4 border-black rounded-2xl p-6">
-                                <h2 className="text-xl font-black text-black mb-4">📅 Cotisations collectées</h2>
-                                {financeData.cotisations.length === 0 ? (
-                                    <p className="text-black/60 italic">Aucune cotisation enregistrée</p>
-                                ) : (
-                                    financeData.cotisations.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between border-b border-black/10 py-3">
-                                            <span className="font-black text-black">{item.mois}</span>
-                                            <span className="font-black text-green-600">{item.montant.toLocaleString()} FCFA</span>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                    <button
+                        onClick={() => setFilterType("sibity")}
+                        className={`px-5 py-2 rounded-xl border-2 border-black font-black uppercase text-xs ${filterType === "sibity" ? "bg-purple-600 text-white" : "bg-white text-black"
+                            }`}
+                    >
+                        📿 Sibity
+                    </button>
 
-                            <div className="bg-white border-4 border-black rounded-2xl p-6">
-                                <h2 className="text-xl font-black text-black mb-4">🔄 Versements au Bureau Central</h2>
-                                {financeData.versements_centraux.length === 0 ? (
-                                    <p className="text-black/60 italic">Aucun versement enregistré</p>
-                                ) : (
-                                    financeData.versements_centraux.map((vers, idx) => (
-                                        <div key={idx} className="flex justify-between items-center border-b border-black/10 py-3">
-                                            <div>
-                                                <span className="font-black text-black">{new Date(vers.date_versement).toLocaleDateString()}</span>
-                                                <span className={`ml-2 text-xs px-2 py-1 rounded-full font-black ${vers.statut === 'valide' ? 'bg-green-100 text-green-800' : vers.statut === 'rejete' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                                    {vers.statut || 'en attente'}
-                                                </span>
-                                            </div>
-                                            <span className="font-black text-blue-600">{vers.montant.toLocaleString()} FCFA</span>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                    <button
+                        onClick={() => setFilterType("mensualite")}
+                        className={`px-5 py-2 rounded-xl border-2 border-black font-black uppercase text-xs ${filterType === "mensualite" ? "bg-blue-600 text-white" : "bg-white text-black"
+                            }`}
+                    >
+                        📅 Mensualités
+                    </button>
+
+                    <button
+                        onClick={() => setFilterType("autres")}
+                        className={`px-5 py-2 rounded-xl border-2 border-black font-black uppercase text-xs ${filterType === "autres" ? "bg-orange-600 text-white" : "bg-white text-black"
+                            }`}
+                    >
+                        ⚡ Autres
+                    </button>
+                </div>
+
+                <div className="bg-white border-4 border-black rounded-[2rem] overflow-hidden shadow-xl">
+                    <div className="bg-black text-white p-4">
+                        <h2 className="font-black uppercase text-sm">
+                            🧾 Historique de mes paiements
+                        </h2>
+                    </div>
+
+                    {cotisationsFiltrees.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <p className="text-xl font-black text-gray-500 italic">
+                                Aucun paiement enregistré pour le moment.
+                            </p>
+                            <p className="text-sm text-gray-400 mt-2">
+                                Dès que le trésorier de votre génération enregistrera un paiement, il apparaîtra ici.
+                            </p>
                         </div>
-                    </>
-                )}
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-100 text-xs uppercase">
+                                    <tr>
+                                        <th className="p-4 font-black">Date</th>
+                                        <th className="p-4 font-black">Type</th>
+                                        <th className="p-4 font-black">Période</th>
+                                        <th className="p-4 font-black text-right">Montant</th>
+                                        <th className="p-4 font-black">Statut</th>
+                                        <th className="p-4 font-black">Notes</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody className="divide-y-2 divide-gray-200">
+                                    {cotisationsFiltrees.map((c) => (
+                                        <tr key={c.id} className="hover:bg-gray-50">
+                                            <td className="p-4 font-bold">
+                                                {formatDate(getCotisationDate(c))}
+                                            </td>
+
+                                            <td className="p-4 font-black">
+                                                {getTypeLabel(c)}
+                                            </td>
+
+                                            <td className="p-4 text-sm font-bold text-gray-600">
+                                                {c.mois || "—"} {c.annee || ""}
+                                            </td>
+
+                                            <td className="p-4 text-right font-black text-green-700">
+                                                {formatMontant(c.montant)}
+                                            </td>
+
+                                            <td className="p-4">
+                                                {getStatusBadge(c.statut)}
+                                            </td>
+
+                                            <td className="p-4 text-sm text-gray-600">
+                                                {c.notes || c.description || "—"}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-6 text-right">
+                    <p className="text-xs text-gray-400 font-black uppercase">
+                        Historique personnel sécurisé — Baliou Padra
+                    </p>
+                </div>
             </div>
-        </div>
+        </main>
     );
 }
 
-function FinanceCard({ title, value, icon, color }) {
+function StatCard({
+    title,
+    value,
+    icon,
+}: {
+    title: string;
+    value: string | number;
+    icon: string;
+}) {
     return (
-        <div className={`bg-white border-4 border-black rounded-2xl p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] border-t-8 ${color}`}>
-            <div className="flex justify-between mb-3">
-                <span className="text-3xl">{icon}</span>
-                <span className="text-xs font-black px-2 py-1 rounded-full bg-black text-white">BP</span>
-            </div>
-            <p className="text-2xl font-black text-black break-words">{value}</p>
-            <p className="text-xs font-bold uppercase text-black/50 mt-1">{title}</p>
+        <div className="bg-white border-4 border-black rounded-2xl p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.08)]">
+            <div className="text-3xl mb-2">{icon}</div>
+
+            <p className="text-xl font-black text-black">{value}</p>
+
+            <p className="text-xs font-black uppercase text-gray-500 mt-1">
+                {title}
+            </p>
         </div>
     );
 }
