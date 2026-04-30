@@ -1,135 +1,266 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
     ArrowLeft,
     TrendingUp,
     TrendingDown,
     Users,
-    DollarSign,
-    Calendar,
     Download,
     RefreshCw,
     PieChart,
-    BarChart3,
     LineChart,
     Activity,
     Award,
     Clock,
     CheckCircle,
     XCircle,
-    Wallet,
     Landmark,
     Receipt,
-    CreditCard,
-    UserCheck,
-    UserPlus,
-    UserX,
-    Building2,
     Target,
     AlertTriangle,
     Crown,
     Medal,
-    Star,
-    Zap
-} from 'lucide-react';
+    Zap,
+} from "lucide-react";
+
+const GENERATIONS_FIXES = [
+    "Administration",
+    "Gagnoa",
+    "Abidjan",
+    "Génération Wassalah dramane",
+    "Génération Dramane konté",
+    "Génération kissima",
+    "Génération maramou basseyabané",
+    "Génération khadja bah baya",
+    "Génération antankhoulé passokhona",
+    "Génération Mamery",
+    "Génération makhadja baliou",
+    "Génération kissima bah",
+    "Génération tchamba",
+    "Diaspora",
+];
+
+const initialStats = {
+    membres: {
+        total: 0,
+        actifs: 0,
+        nouveauxMois: 0,
+        nouveauxAnnee: 0,
+        parGeneration: [] as any[],
+        parVille: [] as any[],
+        parRole: [] as any[],
+        evolutionMensuelle: [] as any[],
+    },
+    finances: {
+        totalCotisations: 0,
+        totalVersements: 0,
+        totalDepenses: 0,
+        soldeGlobal: 0,
+        parType: { sibity: 0, mensualite: 0, extraordinaire: 0 },
+        cotisationsParGeneration: [] as any[],
+        parGeneration: [] as any[],
+        evolutionMensuelle: [] as any[],
+        objectifs: {
+            atteints: 0,
+            enCours: 0,
+            nonAtteints: 0,
+        },
+    },
+    reversements: {
+        total: 0,
+        valides: 0,
+        enAttente: 0,
+        rejetes: 0,
+        negociations: 0,
+        montantTotal: 0,
+        parGeneration: [] as any[],
+        tendance: 0,
+    },
+    cotisationsExtra: {
+        total: 0,
+        actives: 0,
+        terminees: 0,
+        collecteTotale: 0,
+    },
+    performance: {
+        meilleureGeneration: "",
+        meilleureCollecte: 0,
+        membrePlusActif: "Aucun",
+        moisRecord: "",
+        tauxValidation: 0,
+        progressionAnnuelle: 0,
+    },
+};
 
 export default function StatsPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [activePeriod, setActivePeriod] = useState('year'); // month, quarter, year, all
-    const [stats, setStats] = useState({
-        // Membres
-        membres: {
-            total: 0,
-            actifs: 0,
-            nouveauxMois: 0,
-            nouveauxAnnee: 0,
-            parGeneration: [],
-            parVille: [],
-            parRole: [],
-            evolutionMensuelle: []
-        },
-        // Finances
-        finances: {
-            totalCotisations: 0,
-            totalVersements: 0,
-            totalDepenses: 0,
-            soldeGlobal: 0,
-            parType: { sibity: 0, mensualite: 0, extraordinaire: 0 },
-            parGeneration: [],
-            evolutionMensuelle: [],
-            objectifs: {
-                atteints: 0,
-                enCours: 0,
-                nonAtteints: 0
-            }
-        },
-        // Reversements
-        reversements: {
-            total: 0,
-            valides: 0,
-            enAttente: 0,
-            rejetes: 0,
-            montantTotal: 0,
-            parGeneration: [],
-            tendance: 0
-        },
-        // Cotisations extraordinaires
-        cotisationsExtra: {
-            total: 0,
-            actives: 0,
-            terminees: 0,
-            collecteTotale: 0
-        },
-        // Performance
-        performance: {
-            meilleureGeneration: '',
-            meilleureCollecte: 0,
-            membrePlusActif: '',
-            moisRecord: '',
-            tauxValidation: 0,
-            progressionAnnuelle: 0
-        }
-    });
+    const [activePeriod, setActivePeriod] = useState("year");
+    const [stats, setStats] = useState(initialStats);
+    const [allGenerations, setAllGenerations] = useState<string[]>(GENERATIONS_FIXES);
     const router = useRouter();
-
-    // Liste des générations
-    const generationsList = [
-        "Génération Wassalah dramane",
-        "Génération Dramane konté",
-        "Génération kissima",
-        "Génération maramou basseyabané",
-        "Génération khadja bah baya",
-        "Génération antankhoulé passokhona",
-        "Génération Mamery",
-        "Génération makhadja baliou",
-        "Génération kissima bah",
-        "Génération tchamba",
-        "Diaspora"
-    ];
 
     useEffect(() => {
         checkAuthAndLoadData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activePeriod]);
 
+    const cleanValue = (value: any): string => {
+        return (value ?? "").toString().trim();
+    };
+
+    const numberValue = (value: any): number => {
+        const n = Number(value || 0);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    const formatMontant = (montant: any): string => {
+        return new Intl.NumberFormat("fr-FR").format(numberValue(montant)) + " FCFA";
+    };
+
+    const parseDateSafe = (value?: string | Date | null): Date | null => {
+        if (!value) return null;
+
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value;
+        }
+
+        let text = String(value).trim();
+
+        /**
+         * Supabase/Postgres renvoie parfois :
+         * "2026-04-29 23:32:27.59"
+         * Certains navigateurs parsèrent mal ce format.
+         */
+        if (/^\d{4}-\d{2}-\d{2} /.test(text)) {
+            text = text.replace(" ", "T");
+        }
+
+        const d = new Date(text);
+
+        if (Number.isNaN(d.getTime())) {
+            console.warn("Date invalide ignorée:", value);
+            return null;
+        }
+
+        return d;
+    };
+
+    const monthLabel = (dateValue: string | Date): string => {
+        const d = parseDateSafe(dateValue);
+        if (!d) return "Date inconnue";
+
+        return d.toLocaleString("fr-FR", {
+            month: "short",
+            year: "numeric",
+        });
+    };
+
+    const getDateFilter = () => {
+        const now = new Date();
+
+        if (activePeriod === "month") {
+            return {
+                start: new Date(now.getFullYear(), now.getMonth(), 1),
+                end: now,
+            };
+        }
+
+        if (activePeriod === "quarter") {
+            return {
+                start: new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1),
+                end: now,
+            };
+        }
+
+        if (activePeriod === "year") {
+            return {
+                start: new Date(now.getFullYear(), 0, 1),
+                end: now,
+            };
+        }
+
+        return {
+            start: null as Date | null,
+            end: now,
+        };
+    };
+
+    const isInPeriod = (dateValue?: string | null, start?: Date | null): boolean => {
+        if (!start) return true;
+
+        const d = parseDateSafe(dateValue);
+
+        /**
+         * Important :
+         * Si la date est invalide, on ne bloque pas le report.
+         * Cela évite que les budgets acceptés disparaissent des stats.
+         */
+        if (!d) return true;
+
+        return d >= start;
+    };
+
+    const getCotisationType = (c: any): string => {
+        return cleanValue(c.type_cotisation || c.type).toLowerCase();
+    };
+
+    const getCotisationDate = (c: any): string | null => {
+        return c.date_paiement || c.date_cotisation || null;
+    };
+
+    const getBudgetDate = (p: any): string | null => {
+        return p.date_reponse || p.date_proposition || p.created_at || null;
+    };
+
+    const getBudgetMontantFinal = (p: any): number => {
+        return numberValue(p.montant_corrige ?? p.montant_propose);
+    };
+
+    const isBudgetAcceptedByGeneration = (p: any): boolean => {
+        return cleanValue(p.statut_chef) === "accepte";
+    };
+
+    const isBudgetRejected = (p: any): boolean => {
+        return cleanValue(p.statut_bc) === "rejete" || cleanValue(p.statut_chef) === "rejete";
+    };
+
+    const isBudgetNegotiation = (p: any): boolean => {
+        return cleanValue(p.statut_chef) === "negociation";
+    };
+
+    const isBudgetBCValidated = (p: any): boolean => {
+        return cleanValue(p.statut_bc) === "valide";
+    };
+
     const checkAuthAndLoadData = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+
         if (!session) {
-            router.push('/login');
+            router.push("/login");
             return;
         }
 
-        const { data: profile } = await supabase
-            .from('membres')
-            .select('role')
-            .eq('user_id', session.user.id)
+        const { data: profile, error: profileError } = await supabase
+            .from("membres")
+            .select("role")
+            .eq("user_id", session.user.id)
             .maybeSingle();
 
-        if (profile?.role !== 'baliou_padra' && profile?.role !== 'super_admin') {
-            router.push('/dashboard');
+        if (profileError) {
+            console.error("Erreur profil:", profileError);
+            router.push("/dashboard");
+            return;
+        }
+
+        if (profile?.role !== "baliou_padra" && profile?.role !== "super_admin") {
+            router.push("/dashboard");
             return;
         }
 
@@ -137,272 +268,465 @@ export default function StatsPage() {
         setLoading(false);
     };
 
-    const getDateFilter = () => {
-        const now = new Date();
-        if (activePeriod === 'month') {
-            const start = new Date(now.getFullYear(), now.getMonth(), 1);
-            return { start, end: now };
-        } else if (activePeriod === 'quarter') {
-            const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-            return { start: quarterStart, end: now };
-        } else if (activePeriod === 'year') {
-            const start = new Date(now.getFullYear(), 0, 1);
-            return { start, end: now };
-        }
-        return { start: null, end: now };
-    };
-
     const loadAllStats = async () => {
         setRefreshing(true);
-        const { start, end } = getDateFilter();
 
-        // 1. Statistiques des membres
-        const { data: membresData } = await supabase
-            .from('membres')
-            .select('*');
+        const { start } = getDateFilter();
+
+        /**
+         * 1. MEMBRES
+         */
+        const { data: membresData, error: membresError } = await supabase
+            .from("membres")
+            .select("*");
+
+        if (membresError) {
+            console.error("Erreur membres:", membresError);
+        }
 
         const membres = membresData || [];
 
-        // Membres par génération
-        const parGeneration = {};
-        const parVille = {};
-        const parRole = {};
-        membres.forEach(m => {
-            if (m.generation) parGeneration[m.generation] = (parGeneration[m.generation] || 0) + 1;
-            if (m.ville_residence) parVille[m.ville_residence] = (parVille[m.ville_residence] || 0) + 1;
-            if (m.role) parRole[m.role] = (parRole[m.role] || 0) + 1;
+        const memberByUserId = new Map<string, any>();
+        const memberById = new Map<string, any>();
+
+        membres.forEach((m: any) => {
+            if (m.user_id) memberByUserId.set(String(m.user_id), m);
+            if (m.id !== undefined && m.id !== null) memberById.set(String(m.id), m);
         });
 
-        // Nouveaux membres sur la période
-        let nouveauxMois = 0;
-        let nouveauxAnnee = 0;
-        if (start) {
-            nouveauxMois = membres.filter(m => new Date(m.created_at) >= start).length;
-        }
-        nouveauxAnnee = membres.filter(m => new Date(m.created_at).getFullYear() === new Date().getFullYear()).length;
+        const parGeneration: Record<string, number> = {};
+        const parVille: Record<string, number> = {};
+        const parRole: Record<string, number> = {};
+        const evolutionMembres: Record<string, number> = {};
 
-        // Évolution mensuelle des inscriptions
-        const evolutionMensuelle = {};
-        membres.forEach(m => {
+        membres.forEach((m: any) => {
+            const gen = cleanValue(m.generation);
+            const ville = cleanValue(m.ville_residence);
+            const role = cleanValue(m.role || "membre");
+
+            if (gen) parGeneration[gen] = (parGeneration[gen] || 0) + 1;
+            if (ville) parVille[ville] = (parVille[ville] || 0) + 1;
+            if (role) parRole[role] = (parRole[role] || 0) + 1;
+
             if (m.created_at) {
-                const mois = new Date(m.created_at).toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
-                evolutionMensuelle[mois] = (evolutionMensuelle[mois] || 0) + 1;
+                const mois = monthLabel(m.created_at);
+                evolutionMembres[mois] = (evolutionMembres[mois] || 0) + 1;
             }
         });
 
-        // 2. Statistiques financières
-        const { data: cotisationsData } = await supabase
-            .from('cotisations')
-            .select('*, membres(generation)');
+        const now = new Date();
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startYear = new Date(now.getFullYear(), 0, 1);
 
-        const { data: versementsData } = await supabase
-            .from('versements_centraux')
-            .select('*');
+        const nouveauxMois = membres.filter((m: any) => {
+            const d = parseDateSafe(m.created_at);
+            return d ? d >= startMonth : false;
+        }).length;
 
-        const { data: depensesData } = await supabase
-            .from('depenses_centrales')
-            .select('*');
+        const nouveauxAnnee = membres.filter((m: any) => {
+            const d = parseDateSafe(m.created_at);
+            return d ? d >= startYear : false;
+        }).length;
 
-        const cotisations = cotisationsData || [];
-        const versements = versementsData || [];
-        const depenses = depensesData || [];
+        /**
+         * 2. COTISATIONS
+         *
+         * Ta table cotisations a :
+         * - membre_id UUID
+         * - type_cotisation
+         * - date_paiement
+         *
+         * Donc on charge tout, puis on associe membre_id à membres.user_id.
+         */
+        const { data: cotisationsData, error: cotisationsError } = await supabase
+            .from("cotisations")
+            .select("*");
 
-        // Totaux par type
+        if (cotisationsError) {
+            console.error("Erreur cotisations:", cotisationsError);
+        }
+
+        const cotisationsToutes = cotisationsData || [];
+
+        const cotisations = cotisationsToutes.filter((c: any) =>
+            isInPeriod(getCotisationDate(c), start)
+        );
+
         let totalSibity = 0;
         let totalMensualite = 0;
         let totalExtra = 0;
-        cotisations.forEach(c => {
-            if (c.type === 'sibity') totalSibity += c.montant || 0;
-            else if (c.type === 'mensualite') totalMensualite += c.montant || 0;
-        });
-        versements.forEach(v => {
-            if (v.type === 'extraordinaire') totalExtra += v.montant || 0;
-        });
 
-        const totalCotisations = totalSibity + totalMensualite;
-        const totalVersements = versements.filter(v => v.statut === 'valide').reduce((s, v) => s + (v.montant || 0), 0);
-        const totalDepensesVal = depenses.reduce((s, d) => s + (d.montant || 0), 0);
-        const soldeGlobal = totalCotisations + totalVersements - totalDepensesVal;
+        const cotisationsParGeneration: Record<string, number> = {};
+        const financesParGeneration: Record<string, number> = {};
+        const cotisationsParMembre: Record<string, number> = {};
+        const evolutionFinanciere: Record<string, number> = {};
 
-        // Finances par génération
-        const financesParGeneration = {};
-        cotisations.forEach(c => {
-            const gen = c.membres?.generation || 'Inconnu';
-            financesParGeneration[gen] = (financesParGeneration[gen] || 0) + (c.montant || 0);
-        });
-        versements.forEach(v => {
-            if (v.statut === 'valide') {
-                const gen = v.generation || 'Inconnu';
-                financesParGeneration[gen] = (financesParGeneration[gen] || 0) + (v.montant || 0);
+        cotisations.forEach((c: any) => {
+            const montant = numberValue(c.montant);
+            const type = getCotisationType(c);
+
+            if (type.includes("sibity")) {
+                totalSibity += montant;
+            } else if (type.includes("mensualite") || type.includes("mensualité")) {
+                totalMensualite += montant;
+            } else {
+                totalExtra += montant;
+            }
+
+            const membreKey = String(c.membre_id || "");
+            const membre = memberByUserId.get(membreKey) || memberById.get(membreKey);
+
+            const gen = cleanValue(membre?.generation || "Inconnu");
+            const nom = cleanValue(membre?.nom_complet || "Inconnu");
+
+            cotisationsParGeneration[gen] = (cotisationsParGeneration[gen] || 0) + montant;
+            financesParGeneration[gen] = (financesParGeneration[gen] || 0) + montant;
+
+            cotisationsParMembre[nom] = (cotisationsParMembre[nom] || 0) + 1;
+
+            const date = getCotisationDate(c);
+
+            if (date) {
+                const mois = monthLabel(date);
+                evolutionFinanciere[mois] = (evolutionFinanciere[mois] || 0) + montant;
             }
         });
 
-        // Évolution financière mensuelle
-        const evolutionFinanciere = {};
-        const allTransactions = [
-            ...cotisations.map(c => ({ montant: c.montant, date: c.date_cotisation })),
-            ...versements.map(v => ({ montant: v.montant, date: v.date_versement })),
-            ...depenses.map(d => ({ montant: -d.montant, date: d.date_depense }))
-        ];
-        allTransactions.forEach(t => {
-            if (t.date) {
-                const mois = new Date(t.date).toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
-                evolutionFinanciere[mois] = (evolutionFinanciere[mois] || 0) + (t.montant || 0);
+        const totalCotisations = totalSibity + totalMensualite + totalExtra;
+
+        /**
+         * 3. BUDGETS / REVERSEMENTS
+         *
+         * Source correcte :
+         * propositions_budgetaires
+         *
+         * Le report se fait lorsque :
+         * statut_chef = accepte
+         *
+         * Montant reporté :
+         * montant_corrige ?? montant_propose
+         */
+        const { data: propositionsData, error: propositionsError } = await supabase
+            .from("propositions_budgetaires")
+            .select("*");
+
+        if (propositionsError) {
+            console.error("Erreur propositions_budgetaires:", propositionsError);
+        }
+
+        const propositionsToutes = propositionsData || [];
+
+        const propositions = propositionsToutes.filter((p: any) => {
+            if (!start) return true;
+
+            const d = parseDateSafe(getBudgetDate(p));
+
+            if (!d) {
+                return cleanValue(p.statut_chef) === "accepte";
+            }
+
+            return d >= start;
+        });
+
+        const reversementsParGeneration: Record<string, number> = {};
+        let totalVersements = 0;
+
+        propositions.forEach((p: any) => {
+            const montant = getBudgetMontantFinal(p);
+            const gen = cleanValue(p.generation_nom || "Inconnu");
+
+            if (isBudgetAcceptedByGeneration(p) && cleanValue(p.statut_bc) !== "rejete") {
+                totalVersements += montant;
+
+                reversementsParGeneration[gen] = (reversementsParGeneration[gen] || 0) + montant;
+                financesParGeneration[gen] = (financesParGeneration[gen] || 0) + montant;
+
+                const date = getBudgetDate(p);
+
+                if (date) {
+                    const mois = monthLabel(date);
+                    evolutionFinanciere[mois] = (evolutionFinanciere[mois] || 0) + montant;
+                }
             }
         });
 
-        // Objectifs
-        const { data: propositionsData } = await supabase
-            .from('propositions_budgetaires')
-            .select('*');
+        console.log("📊 REPORT BUDGET STATS", {
+            propositionsToutes: propositionsToutes.length,
+            propositionsFiltrees: propositions.length,
+            totalVersements,
+            reversementsParGeneration,
+        });
 
-        const propositions = propositionsData || [];
-        const objectifsAtteints = propositions.filter(p => p.statut === 'valide').length;
-        const objectifsEnCours = propositions.filter(p => p.statut === 'en_attente').length;
-        const objectifsNonAtteints = propositions.filter(p => p.statut === 'rejete').length;
+        const reversementsValides = propositions.filter(isBudgetBCValidated).length;
 
-        // 3. Statistiques des reversements
-        const reversementsValides = versements.filter(v => v.statut === 'valide').length;
-        const reversementsEnAttente = versements.filter(v => v.statut === 'en_attente').length;
-        const reversementsRejetes = versements.filter(v => v.statut === 'rejete').length;
+        const reversementsEnAttente = propositions.filter((p: any) => {
+            return (
+                isBudgetAcceptedByGeneration(p) &&
+                cleanValue(p.statut_bc || "en_attente") === "en_attente"
+            );
+        }).length;
 
-        const reversementsParGeneration = {};
-        versements.forEach(v => {
-            if (v.statut === 'valide') {
-                const gen = v.generation || 'Inconnu';
-                reversementsParGeneration[gen] = (reversementsParGeneration[gen] || 0) + (v.montant || 0);
+        const reversementsRejetes = propositions.filter(isBudgetRejected).length;
+        const reversementsNegociation = propositions.filter(isBudgetNegotiation).length;
+
+        /**
+         * Objectifs budgétaires
+         */
+        const objectifsAtteints = propositions.filter(isBudgetAcceptedByGeneration).length;
+
+        const objectifsEnCours = propositions.filter((p: any) => {
+            const statutChef = cleanValue(p.statut_chef || "en_attente");
+            return statutChef === "en_attente" || statutChef === "negociation";
+        }).length;
+
+        const objectifsNonAtteints = propositions.filter(isBudgetRejected).length;
+
+        /**
+         * 4. DÉPENSES
+         */
+        const { data: depensesData, error: depensesError } = await supabase
+            .from("depenses_centrales")
+            .select("*");
+
+        if (depensesError) {
+            console.warn("Erreur depenses_centrales:", depensesError.message);
+        }
+
+        const depensesToutes = depensesData || [];
+
+        const depenses = depensesToutes.filter((d: any) =>
+            isInPeriod(d.date_depense || d.created_at || null, start)
+        );
+
+        const totalDepensesVal = depenses.reduce(
+            (sum: number, d: any) => sum + numberValue(d.montant),
+            0
+        );
+
+        depenses.forEach((d: any) => {
+            const date = d.date_depense || d.created_at;
+
+            if (date) {
+                const mois = monthLabel(date);
+                evolutionFinanciere[mois] =
+                    (evolutionFinanciere[mois] || 0) - numberValue(d.montant);
             }
         });
 
-        // 4. Cotisations extraordinaires
-        const { data: cotisationsExtraData } = await supabase
-            .from('cotisations_extraordinaires')
-            .select('*');
+        /**
+         * 5. COTISATIONS EXTRAORDINAIRES
+         */
+        let cotisationsExtra: any[] = [];
 
-        const cotisationsExtra = cotisationsExtraData || [];
-        const cotisExtraActives = cotisationsExtra.filter(c => c.statut === 'active').length;
-        const cotisExtraTerminees = cotisationsExtra.filter(c => c.statut === 'terminee').length;
-        const collecteExtraTotale = cotisationsExtra.reduce((s, c) => s + (c.montant_requis || 0), 0);
+        const { data: cotisationsExtraData, error: cotisationsExtraError } =
+            await supabase.from("cotisations_extraordinaires").select("*");
 
-        // 5. Performance
-        let meilleureGeneration = '';
+        if (!cotisationsExtraError && cotisationsExtraData) {
+            cotisationsExtra = cotisationsExtraData;
+        }
+
+        const cotisExtraActives = cotisationsExtra.filter(
+            (c: any) => c.statut === "active"
+        ).length;
+
+        const cotisExtraTerminees = cotisationsExtra.filter(
+            (c: any) => c.statut === "terminee"
+        ).length;
+
+        const collecteExtraTotale = cotisationsExtra.reduce(
+            (s: number, c: any) => s + numberValue(c.montant_requis),
+            0
+        );
+
+        /**
+         * 6. PERFORMANCE
+         */
+        let meilleureGeneration = "";
         let meilleureCollecte = 0;
+
         Object.entries(financesParGeneration).forEach(([gen, montant]) => {
-            if (montant > meilleureCollecte) {
-                meilleureCollecte = montant;
+            if (numberValue(montant) > meilleureCollecte) {
+                meilleureCollecte = numberValue(montant);
                 meilleureGeneration = gen;
             }
         });
 
-        // Membre le plus actif
-        let membrePlusActif = '';
+        let membrePlusActif = "Aucun";
         let maxCotisations = 0;
-        const cotisationsParMembre = {};
-        cotisations.forEach(c => {
-            const nom = c.membres?.nom_complet || 'Inconnu';
-            cotisationsParMembre[nom] = (cotisationsParMembre[nom] || 0) + 1;
-            if (cotisationsParMembre[nom] > maxCotisations) {
-                maxCotisations = cotisationsParMembre[nom];
+
+        Object.entries(cotisationsParMembre).forEach(([nom, count]) => {
+            if (numberValue(count) > maxCotisations) {
+                maxCotisations = numberValue(count);
                 membrePlusActif = nom;
             }
         });
 
-        // Mois record
-        let moisRecord = '';
+        let moisRecord = "";
         let maxMoisMontant = 0;
+
         Object.entries(evolutionFinanciere).forEach(([mois, montant]) => {
-            if (montant > maxMoisMontant) {
-                maxMoisMontant = montant;
+            if (numberValue(montant) > maxMoisMontant) {
+                maxMoisMontant = numberValue(montant);
                 moisRecord = mois;
             }
         });
 
-        // Taux de validation des reversements
-        const tauxValidation = versements.length > 0 ? (reversementsValides / versements.length) * 100 : 0;
+        const totalPropositionsPourValidation =
+            reversementsValides + reversementsEnAttente + reversementsRejetes;
 
-        // Progression annuelle
+        const tauxValidation =
+            totalPropositionsPourValidation > 0
+                ? (reversementsValides / totalPropositionsPourValidation) * 100
+                : 0;
+
         const anneeDerniere = new Date().getFullYear() - 1;
-        const cotisationsAnneeDerniere = cotisations.filter(c => new Date(c.date_cotisation).getFullYear() === anneeDerniere).reduce((s, c) => s + (c.montant || 0), 0);
-        const progressionAnnuelle = cotisationsAnneeDerniere > 0 ? ((totalCotisations - cotisationsAnneeDerniere) / cotisationsAnneeDerniere) * 100 : 0;
+
+        const cotisationsAnneeDerniere = cotisationsToutes
+            .filter((c: any) => {
+                const d = parseDateSafe(getCotisationDate(c));
+                return d ? d.getFullYear() === anneeDerniere : false;
+            })
+            .reduce((s: number, c: any) => s + numberValue(c.montant), 0);
+
+        const progressionAnnuelle =
+            cotisationsAnneeDerniere > 0
+                ? ((totalCotisations - cotisationsAnneeDerniere) / cotisationsAnneeDerniere) * 100
+                : 0;
+
+        const soldeGlobal = totalCotisations + totalVersements - totalDepensesVal;
+
+        const dynamicGenerations = Array.from(
+            new Set([
+                ...GENERATIONS_FIXES,
+                ...membres.map((m: any) => cleanValue(m.generation)).filter(Boolean),
+                ...propositionsToutes
+                    .map((p: any) => cleanValue(p.generation_nom))
+                    .filter(Boolean),
+            ])
+        );
 
         setStats({
             membres: {
                 total: membres.length,
-                actifs: membres.filter(m => m.est_valide === true).length,
+                actifs: membres.filter((m: any) => cleanValue(m.statut_validation) === "valide").length,
                 nouveauxMois,
                 nouveauxAnnee,
-                parGeneration: Object.entries(parGeneration).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
-                parVille: Object.entries(parVille).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10),
-                parRole: Object.entries(parRole).map(([name, count]) => ({ name, count })),
-                evolutionMensuelle: Object.entries(evolutionMensuelle).map(([mois, count]) => ({ mois, count })).slice(-12)
+                parGeneration: Object.entries(parGeneration)
+                    .map(([name, count]) => ({ name, count: numberValue(count) }))
+                    .sort((a, b) => b.count - a.count),
+                parVille: Object.entries(parVille)
+                    .map(([name, count]) => ({ name, count: numberValue(count) }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 10),
+                parRole: Object.entries(parRole).map(([name, count]) => ({
+                    name,
+                    count: numberValue(count),
+                })),
+                evolutionMensuelle: Object.entries(evolutionMembres)
+                    .map(([mois, count]) => ({ mois, count: numberValue(count) }))
+                    .slice(-12),
             },
             finances: {
                 totalCotisations,
                 totalVersements,
                 totalDepenses: totalDepensesVal,
                 soldeGlobal,
-                parType: { sibity: totalSibity, mensualite: totalMensualite, extraordinaire: totalExtra },
-                parGeneration: Object.entries(financesParGeneration).map(([name, montant]) => ({ name, montant })).sort((a, b) => b.montant - a.montant),
-                evolutionMensuelle: Object.entries(evolutionFinanciere).map(([mois, montant]) => ({ mois, montant })).slice(-12),
+                parType: {
+                    sibity: totalSibity,
+                    mensualite: totalMensualite,
+                    extraordinaire: totalExtra,
+                },
+                cotisationsParGeneration: Object.entries(cotisationsParGeneration)
+                    .map(([name, montant]) => ({ name, montant: numberValue(montant) }))
+                    .sort((a, b) => b.montant - a.montant),
+                parGeneration: Object.entries(financesParGeneration)
+                    .map(([name, montant]) => ({ name, montant: numberValue(montant) }))
+                    .sort((a, b) => b.montant - a.montant),
+                evolutionMensuelle: Object.entries(evolutionFinanciere)
+                    .map(([mois, montant]) => ({ mois, montant: numberValue(montant) }))
+                    .slice(-12),
                 objectifs: {
                     atteints: objectifsAtteints,
                     enCours: objectifsEnCours,
-                    nonAtteints: objectifsNonAtteints
-                }
+                    nonAtteints: objectifsNonAtteints,
+                },
             },
             reversements: {
-                total: versements.length,
+                total: propositions.filter((p: any) => cleanValue(p.statut_chef) !== "en_attente").length,
                 valides: reversementsValides,
                 enAttente: reversementsEnAttente,
                 rejetes: reversementsRejetes,
+                negociations: reversementsNegociation,
                 montantTotal: totalVersements,
-                parGeneration: Object.entries(reversementsParGeneration).map(([name, montant]) => ({ name, montant })).sort((a, b) => b.montant - a.montant),
-                tendance: reversementsValides > reversementsEnAttente ? 1 : -1
+                parGeneration: Object.entries(reversementsParGeneration)
+                    .map(([name, montant]) => ({ name, montant: numberValue(montant) }))
+                    .sort((a, b) => b.montant - a.montant),
+                tendance: reversementsValides >= reversementsEnAttente ? 1 : -1,
             },
             cotisationsExtra: {
                 total: cotisationsExtra.length,
                 actives: cotisExtraActives,
                 terminees: cotisExtraTerminees,
-                collecteTotale: collecteExtraTotale
+                collecteTotale: collecteExtraTotale,
             },
             performance: {
                 meilleureGeneration,
                 meilleureCollecte,
-                membrePlusActif: membrePlusActif || 'Aucun',
+                membrePlusActif,
                 moisRecord,
                 tauxValidation,
-                progressionAnnuelle
-            }
+                progressionAnnuelle,
+            },
         });
 
+        setAllGenerations(dynamicGenerations);
         setRefreshing(false);
-    };
-
-    const formatMontant = (montant) => {
-        return new Intl.NumberFormat('fr-FR').format(montant) + ' FCFA';
     };
 
     const exportStats = () => {
         const data = {
             date: new Date().toISOString(),
             periode: activePeriod,
-            stats
+            stats,
         };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], {
+            type: "application/json",
+        });
+
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
+
         a.href = url;
-        a.download = `statistiques_baliou_padra_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `statistiques_baliou_padra_${new Date()
+            .toISOString()
+            .split("T")[0]}.json`;
+
         a.click();
         URL.revokeObjectURL(url);
     };
+
+    const maxPerformanceTotal = Math.max(
+        ...allGenerations.map((gen) => {
+            const cotisationsMontant =
+                stats.finances.cotisationsParGeneration.find((f: any) => f.name === gen)?.montant || 0;
+
+            const reversementsMontant =
+                stats.reversements.parGeneration.find((r: any) => r.name === gen)?.montant || 0;
+
+            return cotisationsMontant + reversementsMontant;
+        }),
+        1
+    );
 
     if (loading) {
         return (
             <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin text-4xl mb-4">⏳</div>
-                    <p className="text-2xl font-black text-black">Chargement des statistiques...</p>
+                    <p className="text-2xl font-black text-black">
+                        Chargement des statistiques...
+                    </p>
                 </div>
             </div>
         );
@@ -413,56 +737,84 @@ export default function StatsPage() {
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
-                    <Link href="/admin-central" className="inline-flex items-center gap-2 text-black font-black hover:text-[#146332] transition-colors mb-4">
+                    <Link
+                        href="/admin-central"
+                        className="inline-flex items-center gap-2 text-black font-black hover:text-[#146332] transition-colors mb-4"
+                    >
                         <ArrowLeft size={20} /> Retour au tableau de bord
                     </Link>
+
                     <div className="flex justify-between items-start flex-wrap gap-4">
                         <div>
                             <h1 className="text-4xl font-black text-[#146332] uppercase italic">
                                 TABLEAU DE BORD STATISTIQUE
                             </h1>
                             <div className="h-1 w-32 bg-black mt-2"></div>
-                            <p className="text-black/60 mt-2">Analyse complète des données de la communauté</p>
+                            <p className="text-black/60 mt-2">
+                                Analyse complète des données de la communauté
+                            </p>
                         </div>
-                        <div className="flex gap-3">
+
+                        <div className="flex flex-wrap gap-3">
                             <div className="flex border-4 border-black rounded-xl overflow-hidden">
                                 <button
-                                    onClick={() => setActivePeriod('month')}
-                                    className={`px-4 py-2 font-black text-sm ${activePeriod === 'month' ? 'bg-black text-white' : 'bg-white text-black'}`}
+                                    onClick={() => setActivePeriod("month")}
+                                    className={`px-4 py-2 font-black text-sm ${
+                                        activePeriod === "month"
+                                            ? "bg-black text-white"
+                                            : "bg-white text-black"
+                                    }`}
                                 >
                                     Mois
                                 </button>
                                 <button
-                                    onClick={() => setActivePeriod('quarter')}
-                                    className={`px-4 py-2 font-black text-sm ${activePeriod === 'quarter' ? 'bg-black text-white' : 'bg-white text-black'}`}
+                                    onClick={() => setActivePeriod("quarter")}
+                                    className={`px-4 py-2 font-black text-sm ${
+                                        activePeriod === "quarter"
+                                            ? "bg-black text-white"
+                                            : "bg-white text-black"
+                                    }`}
                                 >
                                     Trimestre
                                 </button>
                                 <button
-                                    onClick={() => setActivePeriod('year')}
-                                    className={`px-4 py-2 font-black text-sm ${activePeriod === 'year' ? 'bg-black text-white' : 'bg-white text-black'}`}
+                                    onClick={() => setActivePeriod("year")}
+                                    className={`px-4 py-2 font-black text-sm ${
+                                        activePeriod === "year"
+                                            ? "bg-black text-white"
+                                            : "bg-white text-black"
+                                    }`}
                                 >
                                     Année
                                 </button>
                                 <button
-                                    onClick={() => setActivePeriod('all')}
-                                    className={`px-4 py-2 font-black text-sm ${activePeriod === 'all' ? 'bg-black text-white' : 'bg-white text-black'}`}
+                                    onClick={() => setActivePeriod("all")}
+                                    className={`px-4 py-2 font-black text-sm ${
+                                        activePeriod === "all"
+                                            ? "bg-black text-white"
+                                            : "bg-white text-black"
+                                    }`}
                                 >
                                     Total
                                 </button>
                             </div>
+
                             <button
                                 onClick={exportStats}
                                 className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl font-black text-sm hover:bg-[#146332] transition-all"
                             >
                                 <Download size={16} /> Exporter
                             </button>
+
                             <button
                                 onClick={loadAllStats}
                                 disabled={refreshing}
                                 className="flex items-center gap-2 bg-gray-200 text-black px-4 py-2 rounded-xl font-black text-sm hover:bg-gray-300 transition-all"
                             >
-                                <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                                <RefreshCw
+                                    size={16}
+                                    className={refreshing ? "animate-spin" : ""}
+                                />
                                 Actualiser
                             </button>
                         </div>
@@ -474,34 +826,40 @@ export default function StatsPage() {
                     <KpiCard
                         title="Membres"
                         value={stats.membres.total}
-                        subtitle={`+${stats.membres.nouveauxMois} ce mois`}
+                        subtitle={`${stats.membres.actifs} actifs • +${stats.membres.nouveauxMois} ce mois`}
                         icon={<Users size={20} />}
                         color="bg-blue-500"
                     />
+
                     <KpiCard
                         title="Cotisations"
                         value={formatMontant(stats.finances.totalCotisations)}
                         icon={<Receipt size={20} />}
                         color="bg-green-500"
                     />
+
                     <KpiCard
-                        title="Versements"
+                        title="Reversements"
                         value={formatMontant(stats.finances.totalVersements)}
+                        subtitle="Acceptés par génération"
                         icon={<TrendingUp size={20} />}
                         color="bg-purple-500"
                     />
+
                     <KpiCard
                         title="Dépenses"
                         value={formatMontant(stats.finances.totalDepenses)}
                         icon={<TrendingDown size={20} />}
                         color="bg-red-500"
                     />
+
                     <KpiCard
                         title="Solde"
                         value={formatMontant(stats.finances.soldeGlobal)}
                         icon={<Landmark size={20} />}
-                        color={stats.finances.soldeGlobal >= 0 ? 'bg-green-600' : 'bg-red-600'}
+                        color={stats.finances.soldeGlobal >= 0 ? "bg-green-600" : "bg-red-600"}
                     />
+
                     <KpiCard
                         title="Validation"
                         value={`${stats.performance.tauxValidation.toFixed(1)}%`}
@@ -514,27 +872,43 @@ export default function StatsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <RecordCard
                         title="Meilleure génération"
-                        value={stats.performance.meilleureGeneration || '—'}
+                        value={stats.performance.meilleureGeneration || "—"}
                         subtitle={formatMontant(stats.performance.meilleureCollecte)}
                         icon={<Crown size={24} className="text-yellow-500" />}
                     />
+
                     <RecordCard
                         title="Membre le plus actif"
                         value={stats.performance.membrePlusActif}
                         subtitle="Plus grand nombre de cotisations"
                         icon={<Medal size={24} className="text-blue-500" />}
                     />
+
                     <RecordCard
                         title="Mois record"
-                        value={stats.performance.moisRecord || '—'}
-                        subtitle={formatMontant(stats.evolutionFinanciere?.find(e => e.mois === stats.performance.moisRecord)?.montant || 0)}
+                        value={stats.performance.moisRecord || "—"}
+                        subtitle={formatMontant(
+                            stats.finances.evolutionMensuelle.find(
+                                (e: any) => e.mois === stats.performance.moisRecord
+                            )?.montant || 0
+                        )}
                         icon={<Zap size={24} className="text-orange-500" />}
                     />
+
                     <RecordCard
                         title="Progression annuelle"
-                        value={`${stats.performance.progressionAnnuelle >= 0 ? '+' : ''}${stats.performance.progressionAnnuelle.toFixed(1)}%`}
+                        value={`${stats.performance.progressionAnnuelle >= 0 ? "+" : ""}${stats.performance.progressionAnnuelle.toFixed(1)}%`}
                         subtitle="vs année précédente"
-                        icon={<TrendingUp size={24} className={stats.performance.progressionAnnuelle >= 0 ? 'text-green-500' : 'text-red-500'} />}
+                        icon={
+                            <TrendingUp
+                                size={24}
+                                className={
+                                    stats.performance.progressionAnnuelle >= 0
+                                        ? "text-green-500"
+                                        : "text-red-500"
+                                }
+                            />
+                        }
                     />
                 </div>
 
@@ -543,193 +917,303 @@ export default function StatsPage() {
                     <h3 className="font-black text-black mb-4 flex items-center gap-2">
                         <LineChart size={18} /> Évolution financière
                     </h3>
-                    <div className="space-y-3">
-                        {stats.finances.evolutionMensuelle.map((item, idx) => (
-                            <div key={idx}>
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="font-black text-black">{item.mois}</span>
-                                    <span className={`font-black ${item.montant >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {item.montant >= 0 ? '+' : '-'}{formatMontant(Math.abs(item.montant))}
-                                    </span>
+
+                    {stats.finances.evolutionMensuelle.length === 0 ? (
+                        <p className="text-black/50 font-bold italic">
+                            Aucune donnée financière sur la période.
+                        </p>
+                    ) : (
+                        <div className="space-y-3">
+                            {stats.finances.evolutionMensuelle.map((item: any, idx: number) => (
+                                <div key={idx}>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-black text-black">{item.mois}</span>
+                                        <span
+                                            className={`font-black ${
+                                                item.montant >= 0
+                                                    ? "text-green-600"
+                                                    : "text-red-600"
+                                            }`}
+                                        >
+                                            {item.montant >= 0 ? "+" : "-"}
+                                            {formatMontant(Math.abs(item.montant))}
+                                        </span>
+                                    </div>
+
+                                    <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden border border-black">
+                                        <div
+                                            className={`h-full ${
+                                                item.montant >= 0
+                                                    ? "bg-green-500"
+                                                    : "bg-red-500"
+                                            } rounded-full transition-all duration-500`}
+                                            style={{
+                                                width: `${Math.min(
+                                                    100,
+                                                    (Math.abs(item.montant) / 1000000) * 100
+                                                )}%`,
+                                            }}
+                                        ></div>
+                                    </div>
                                 </div>
-                                <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden border border-black">
-                                    <div
-                                        className={`h-full ${item.montant >= 0 ? 'bg-green-500' : 'bg-red-500'} rounded-full transition-all duration-500`}
-                                        style={{ width: `${Math.min(100, Math.abs(item.montant) / 1000000)}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    {/* Répartition des cotisations par type */}
+                    {/* Répartition cotisations */}
                     <div className="bg-white border-4 border-black rounded-2xl p-6">
                         <h3 className="font-black text-black mb-4 flex items-center gap-2">
                             <PieChart size={18} /> Répartition des cotisations
                         </h3>
+
                         <div className="space-y-4">
-                            <div>
-                                <div className="flex justify-between mb-1">
-                                    <span className="font-black text-black">📿 Sibity</span>
-                                    <span className="font-black text-black/70">{formatMontant(stats.finances.parType.sibity)}</span>
-                                </div>
-                                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(stats.finances.parType.sibity / (stats.finances.totalCotisations || 1)) * 100}%` }}></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1">
-                                    <span className="font-black text-black">📅 Mensualités</span>
-                                    <span className="font-black text-black/70">{formatMontant(stats.finances.parType.mensualite)}</span>
-                                </div>
-                                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(stats.finances.parType.mensualite / (stats.finances.totalCotisations || 1)) * 100}%` }}></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1">
-                                    <span className="font-black text-black">⚡ Extraordinaire</span>
-                                    <span className="font-black text-black/70">{formatMontant(stats.finances.parType.extraordinaire)}</span>
-                                </div>
-                                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-orange-500 rounded-full" style={{ width: `${(stats.finances.parType.extraordinaire / (stats.finances.totalCotisations || 1)) * 100}%` }}></div>
-                                </div>
-                            </div>
+                            <CotisationBar
+                                label="📿 Sibity"
+                                montant={stats.finances.parType.sibity}
+                                total={stats.finances.totalCotisations}
+                                color="bg-purple-500"
+                            />
+
+                            <CotisationBar
+                                label="📅 Mensualités"
+                                montant={stats.finances.parType.mensualite}
+                                total={stats.finances.totalCotisations}
+                                color="bg-blue-500"
+                            />
+
+                            <CotisationBar
+                                label="⚡ Extraordinaire"
+                                montant={stats.finances.parType.extraordinaire}
+                                total={stats.finances.totalCotisations}
+                                color="bg-orange-500"
+                            />
                         </div>
                     </div>
 
-                    {/* Top générations par contribution */}
+                    {/* Top générations */}
                     <div className="bg-white border-4 border-black rounded-2xl p-6">
                         <h3 className="font-black text-black mb-4 flex items-center gap-2">
                             <Award size={18} /> Top générations par contribution
                         </h3>
-                        <div className="space-y-3">
-                            {stats.finances.parGeneration.slice(0, 5).map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-center border-b border-black/10 py-2">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xl font-black text-black/40">#{idx + 1}</span>
-                                        <span className="font-black text-black">{item.name}</span>
+
+                        {stats.finances.parGeneration.length === 0 ? (
+                            <p className="text-black/50 font-bold italic">
+                                Aucune contribution enregistrée.
+                            </p>
+                        ) : (
+                            <div className="space-y-3">
+                                {stats.finances.parGeneration.slice(0, 5).map((item: any, idx: number) => (
+                                    <div
+                                        key={idx}
+                                        className="flex justify-between items-center border-b border-black/10 py-2"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xl font-black text-black/40">
+                                                #{idx + 1}
+                                            </span>
+                                            <span className="font-black text-black">
+                                                {item.name}
+                                            </span>
+                                        </div>
+
+                                        <span className="font-black text-green-600">
+                                            {formatMontant(item.montant)}
+                                        </span>
                                     </div>
-                                    <span className="font-black text-green-600">{formatMontant(item.montant)}</span>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                    {/* Évolution des membres */}
+                    {/* Évolution membres */}
                     <div className="bg-white border-4 border-black rounded-2xl p-6">
                         <h3 className="font-black text-black mb-4 flex items-center gap-2">
                             <Users size={18} /> Évolution des membres
                         </h3>
+
                         <div className="space-y-2">
-                            {stats.membres.evolutionMensuelle.slice(-6).map((item, idx) => (
+                            {stats.membres.evolutionMensuelle.slice(-6).map((item: any, idx: number) => (
                                 <div key={idx} className="flex justify-between text-sm">
                                     <span className="text-black/70">{item.mois}</span>
                                     <span className="font-black text-black">+{item.count}</span>
                                 </div>
                             ))}
                         </div>
+
                         <div className="mt-4 pt-3 border-t-2 border-black/10">
                             <div className="flex justify-between">
                                 <span className="text-black/70">Nouveaux ce mois</span>
-                                <span className="font-black text-green-600">+{stats.membres.nouveauxMois}</span>
+                                <span className="font-black text-green-600">
+                                    +{stats.membres.nouveauxMois}
+                                </span>
                             </div>
+
                             <div className="flex justify-between mt-1">
                                 <span className="text-black/70">Nouveaux cette année</span>
-                                <span className="font-black text-green-600">+{stats.membres.nouveauxAnnee}</span>
+                                <span className="font-black text-green-600">
+                                    +{stats.membres.nouveauxAnnee}
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    {/* État des reversements */}
+                    {/* État reversements */}
                     <div className="bg-white border-4 border-black rounded-2xl p-6">
                         <h3 className="font-black text-black mb-4 flex items-center gap-2">
                             <Activity size={18} /> État des reversements
                         </h3>
+
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> Validés</span>
-                                <span className="font-black text-green-600">{stats.reversements.valides}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="flex items-center gap-2"><Clock size={16} className="text-yellow-500" /> En attente</span>
-                                <span className="font-black text-yellow-600">{stats.reversements.enAttente}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="flex items-center gap-2"><XCircle size={16} className="text-red-500" /> Rejetés</span>
-                                <span className="font-black text-red-600">{stats.reversements.rejetes}</span>
-                            </div>
+                            <StatLine
+                                icon={<CheckCircle size={16} className="text-green-500" />}
+                                label="Validés BC"
+                                value={stats.reversements.valides}
+                                color="text-green-600"
+                            />
+
+                            <StatLine
+                                icon={<Clock size={16} className="text-yellow-500" />}
+                                label="En attente BC"
+                                value={stats.reversements.enAttente}
+                                color="text-yellow-600"
+                            />
+
+                            <StatLine
+                                icon={<XCircle size={16} className="text-red-500" />}
+                                label="Rejetés"
+                                value={stats.reversements.rejetes}
+                                color="text-red-600"
+                            />
                         </div>
+
                         <div className="mt-4 pt-3 border-t-2 border-black/10">
                             <div className="flex justify-between">
-                                <span className="text-black/70">Montant total reversé</span>
-                                <span className="font-black text-purple-600">{formatMontant(stats.reversements.montantTotal)}</span>
+                                <span className="text-black/70">Montant accepté</span>
+                                <span className="font-black text-purple-600">
+                                    {formatMontant(stats.reversements.montantTotal)}
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Objectifs budgétaires */}
+                    {/* Objectifs */}
                     <div className="bg-white border-4 border-black rounded-2xl p-6">
                         <h3 className="font-black text-black mb-4 flex items-center gap-2">
                             <Target size={18} /> Objectifs budgétaires
                         </h3>
+
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> Atteints</span>
-                                <span className="font-black text-green-600">{stats.finances.objectifs.atteints}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="flex items-center gap-2"><Clock size={16} className="text-yellow-500" /> En cours</span>
-                                <span className="font-black text-yellow-600">{stats.finances.objectifs.enCours}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="flex items-center gap-2"><AlertTriangle size={16} className="text-red-500" /> Non atteints</span>
-                                <span className="font-black text-red-600">{stats.finances.objectifs.nonAtteints}</span>
-                            </div>
+                            <StatLine
+                                icon={<CheckCircle size={16} className="text-green-500" />}
+                                label="Atteints"
+                                value={stats.finances.objectifs.atteints}
+                                color="text-green-600"
+                            />
+
+                            <StatLine
+                                icon={<Clock size={16} className="text-yellow-500" />}
+                                label="En cours"
+                                value={stats.finances.objectifs.enCours}
+                                color="text-yellow-600"
+                            />
+
+                            <StatLine
+                                icon={<AlertTriangle size={16} className="text-red-500" />}
+                                label="Non atteints"
+                                value={stats.finances.objectifs.nonAtteints}
+                                color="text-red-600"
+                            />
                         </div>
                     </div>
                 </div>
 
-                {/* Tableau des générations */}
+                {/* Tableau générations */}
                 <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
                     <div className="bg-black p-4">
-                        <h2 className="text-white font-black uppercase text-sm">📊 Performance par génération</h2>
+                        <h2 className="text-white font-black uppercase text-sm">
+                            📊 Performance par génération
+                        </h2>
                     </div>
+
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="p-3 text-left font-black text-sm">Génération</th>
-                                    <th className="p-3 text-center font-black text-sm">Membres</th>
-                                    <th className="p-3 text-right font-black text-sm">Cotisations</th>
-                                    <th className="p-3 text-right font-black text-sm">Reversements</th>
-                                    <th className="p-3 text-right font-black text-sm">Total</th>
-                                    <th className="p-3 text-center font-black text-sm">Performance</th>
+                                    <th className="p-3 text-left font-black text-sm">
+                                        Génération
+                                    </th>
+                                    <th className="p-3 text-center font-black text-sm">
+                                        Membres
+                                    </th>
+                                    <th className="p-3 text-right font-black text-sm">
+                                        Cotisations
+                                    </th>
+                                    <th className="p-3 text-right font-black text-sm">
+                                        Reversements
+                                    </th>
+                                    <th className="p-3 text-right font-black text-sm">
+                                        Total
+                                    </th>
+                                    <th className="p-3 text-center font-black text-sm">
+                                        Performance
+                                    </th>
                                 </tr>
                             </thead>
+
                             <tbody>
-                                {generationsList.map((gen, idx) => {
-                                    const membresCount = stats.membres.parGeneration.find(m => m.name === gen)?.count || 0;
-                                    const cotisationsMontant = stats.finances.parGeneration.find(f => f.name === gen)?.montant || 0;
-                                    const reversementsMontant = stats.reversements.parGeneration.find(r => r.name === gen)?.montant || 0;
+                                {allGenerations.map((gen, idx) => {
+                                    const membresCount =
+                                        stats.membres.parGeneration.find((m: any) => m.name === gen)
+                                            ?.count || 0;
+
+                                    const cotisationsMontant =
+                                        stats.finances.cotisationsParGeneration.find(
+                                            (f: any) => f.name === gen
+                                        )?.montant || 0;
+
+                                    const reversementsMontant =
+                                        stats.reversements.parGeneration.find(
+                                            (r: any) => r.name === gen
+                                        )?.montant || 0;
+
                                     const total = cotisationsMontant + reversementsMontant;
-                                    const maxTotal = stats.finances.parGeneration[0]?.montant || 1;
-                                    const performance = (total / maxTotal) * 100;
+                                    const performance = (total / maxPerformanceTotal) * 100;
 
                                     return (
-                                        <tr key={idx} className="border-b border-black/10 hover:bg-gray-50 transition-colors">
+                                        <tr
+                                            key={idx}
+                                            className="border-b border-black/10 hover:bg-gray-50 transition-colors"
+                                        >
                                             <td className="p-3 font-black text-black">{gen}</td>
-                                            <td className="p-3 text-center text-black/70">{membresCount}</td>
-                                            <td className="p-3 text-right text-green-600 font-black">{formatMontant(cotisationsMontant)}</td>
-                                            <td className="p-3 text-right text-purple-600 font-black">{formatMontant(reversementsMontant)}</td>
-                                            <td className="p-3 text-right text-blue-600 font-black">{formatMontant(total)}</td>
+
+                                            <td className="p-3 text-center text-black/70">
+                                                {membresCount}
+                                            </td>
+
+                                            <td className="p-3 text-right text-green-600 font-black">
+                                                {formatMontant(cotisationsMontant)}
+                                            </td>
+
+                                            <td className="p-3 text-right text-purple-600 font-black">
+                                                {formatMontant(reversementsMontant)}
+                                            </td>
+
+                                            <td className="p-3 text-right text-blue-600 font-black">
+                                                {formatMontant(total)}
+                                            </td>
+
                                             <td className="p-3 text-center">
                                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${performance}%` }}></div>
+                                                    <div
+                                                        className="bg-green-500 h-2 rounded-full"
+                                                        style={{
+                                                            width: `${Math.min(100, performance)}%`,
+                                                        }}
+                                                    ></div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -751,35 +1235,109 @@ export default function StatsPage() {
     );
 }
 
-// Composants auxiliaires
-function KpiCard({ title, value, subtitle, icon, color }) {
+function KpiCard({
+    title,
+    value,
+    subtitle,
+    icon,
+    color,
+}: {
+    title: string;
+    value: string | number;
+    subtitle?: string;
+    icon: React.ReactNode;
+    color: string;
+}) {
     return (
         <div className="bg-white border-4 border-black rounded-2xl p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)]">
             <div className="flex items-center justify-between mb-2">
-                <div className={`${color} p-2 rounded-xl text-white`}>
-                    {icon}
-                </div>
+                <div className={`${color} p-2 rounded-xl text-white`}>{icon}</div>
                 <span className="text-xs font-black uppercase text-black/40">KPI</span>
             </div>
+
             <p className="text-xl font-black text-black">{value}</p>
             <p className="text-xs font-black uppercase text-black/50 mt-1">{title}</p>
-            <p className="text-xl font-black text-black">{value}</p>
-            <p className="text-xs font-black uppercase text-black/50 mt-1">{title}</p>
+
             {subtitle && <p className="text-xs text-black/40 mt-2">{subtitle}</p>}
         </div>
     );
 }
 
-function RecordCard({ title, value, subtitle, icon }) {
+function RecordCard({
+    title,
+    value,
+    subtitle,
+    icon,
+}: {
+    title: string;
+    value: string | number;
+    subtitle?: string;
+    icon: React.ReactNode;
+}) {
     return (
         <div className="bg-white border-4 border-black rounded-2xl p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.1)]">
             <div className="flex items-center gap-3 mb-2">
                 {icon}
                 <span className="text-xs font-black uppercase text-black/40">Record</span>
             </div>
+
             <p className="text-lg font-black text-black truncate">{value}</p>
             <p className="text-sm font-black text-black/70">{title}</p>
+
             {subtitle && <p className="text-xs text-black/40 mt-1">{subtitle}</p>}
+        </div>
+    );
+}
+
+function CotisationBar({
+    label,
+    montant,
+    total,
+    color,
+}: {
+    label: string;
+    montant: number;
+    total: number;
+    color: string;
+}) {
+    const percent = total > 0 ? (montant / total) * 100 : 0;
+
+    return (
+        <div>
+            <div className="flex justify-between mb-1">
+                <span className="font-black text-black">{label}</span>
+                <span className="font-black text-black/70">
+                    {new Intl.NumberFormat("fr-FR").format(montant)} FCFA
+                </span>
+            </div>
+
+            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                    className={`h-full ${color} rounded-full`}
+                    style={{ width: `${Math.min(100, percent)}%` }}
+                ></div>
+            </div>
+        </div>
+    );
+}
+
+function StatLine({
+    icon,
+    label,
+    value,
+    color,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    value: string | number;
+    color: string;
+}) {
+    return (
+        <div className="flex justify-between items-center">
+            <span className="flex items-center gap-2">
+                {icon} {label}
+            </span>
+            <span className={`font-black ${color}`}>{value}</span>
         </div>
     );
 }
