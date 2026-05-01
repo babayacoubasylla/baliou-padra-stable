@@ -1,0 +1,41 @@
+@startuml
+title Séquence - Budget, validation génération et reversements
+
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Bureau Central" as BC
+actor "Chef Génération" as Chef
+actor "Trésorier" as Tresorier
+participant "Admin Central Finance" as Finance
+participant "Dashboard Chef" as ChefUI
+participant "Dashboard Trésorier" as TresUI
+database "propositions_budgetaires" as Budget
+participant "RPC repondre_budget_generation()" as RPCGen
+participant "Page Reversements" as Reversements
+participant "Stats Dashboard" as Stats
+
+BC -> Finance : crée proposition budgétaire
+Finance -> Budget : INSERT\nstatut_bc='en_attente'\nstatut_chef='en_attente'
+Budget --> Finance : proposition créée
+
+Chef -> ChefUI : accepte / rejette / négocie
+ChefUI -> RPCGen : repondre_budget_generation(id, action)
+RPCGen -> Budget : UPDATE statut_chef,\nmontant_corrige,\ndate_reponse,\nvalide_par_role
+
+Tresorier -> TresUI : accepte / rejette / négocie
+TresUI -> RPCGen : repondre_budget_generation(id, action)
+RPCGen -> Budget : UPDATE statut_chef,\nmontant_corrige,\ndate_reponse,\nvalide_par_role
+
+BC -> Reversements : consulte reversements
+Reversements -> Budget : SELECT propositions\nWHERE statut_chef in\n(accepte, rejete, negociation)
+Budget --> Reversements : montants acceptés
+
+BC -> Reversements : valide côté BC
+Reversements -> Budget : UPDATE statut_bc='valide'
+
+Stats -> Budget : SELECT propositions_budgetaires
+Stats -> Stats : cumul si statut_chef='accepte'\net statut_bc != 'rejete'
+Stats --> BC : affiche total reversements
+
+@enduml

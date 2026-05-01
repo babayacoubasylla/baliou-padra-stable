@@ -1,0 +1,148 @@
+@startuml
+title Modèle de domaine / Base de données - Baliou Padra
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+class "auth.users" as AuthUser {
+  id : uuid
+  email : text
+  created_at : timestamptz
+}
+
+class membres {
+  id : bigint
+  user_id : uuid
+  email : text
+  nom_complet : text
+  nom_soninke : text
+  petit_nom : text
+  sexe : text
+  generation : text
+  ville_residence : text
+  quartier : text
+  telephone : text
+  contact_urgence : text
+  pere_nom_civil : text
+  mere_nom_civil : text
+  statut_matrimonial : text
+  etat_scolarisation : text
+  niveau_etudes : text
+  statut_professionnel : text
+  domaine_activite : text
+  role : text
+  statut_validation : text
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+class cotisations {
+  id : uuid
+  membre_id : bigint
+  montant : numeric
+  type_cotisation : text
+  mois : text
+  annee : int
+  date_paiement : timestamptz
+  notes : text
+  statut : text
+  saisi_par : uuid
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+class propositions_budgetaires {
+  id : uuid
+  generation_nom : text
+  annee : int
+  montant_propose : numeric
+  montant_corrige : numeric
+  description : text
+  statut_bc : text
+  statut_chef : text
+  commentaire_chef : text
+  date_proposition : timestamptz
+  date_reponse : timestamptz
+  valide_par_membre_id : bigint
+  valide_par_role : text
+}
+
+class depenses_centrales {
+  id : uuid
+  libelle : text
+  montant : numeric
+  description : text
+  date_depense : date
+  categorie : text
+  cree_par : text
+  created_at : timestamptz
+}
+
+class annonces {
+  id : uuid
+  titre : text
+  contenu : text
+  visibilite : text
+  generation_cible : text
+  auteur_id : uuid
+  created_at : timestamptz
+}
+
+class cotisations_extraordinaires {
+  id : uuid
+  nom : text
+  description : text
+  montant_requis : numeric
+  date_limite : date
+  attribue_a_toutes : boolean
+  generations_concernees : jsonb
+  statut : text
+  created_at : timestamptz
+}
+
+class generations {
+  id : uuid
+  nom : text
+  objectif_annuel : numeric
+  visibilite_finances : text
+}
+
+class app_logs {
+  id : uuid
+  user_id : uuid
+  email : text
+  role : text
+  action : text
+  level : text
+  message : text
+  metadata : jsonb
+  created_at : timestamptz
+}
+
+class paiements_futurs {
+  id : uuid
+  membre_id : bigint
+  provider : text
+  provider_reference : text
+  montant : numeric
+  devise : text
+  statut : text
+  metadata : jsonb
+  created_at : timestamptz
+  paid_at : timestamptz
+}
+
+AuthUser "1" --> "0..1" membres : user_id
+membres "1" --> "0..*" cotisations : membre_id
+membres "1" --> "0..*" propositions_budgetaires : valide_par_membre_id
+membres "1" --> "0..*" paiements_futurs : membre_id
+
+generations "1" --> "0..*" membres : generation
+generations "1" --> "0..*" propositions_budgetaires : generation_nom
+generations "1" --> "0..*" annonces : generation_cible
+
+membres "1" --> "0..*" annonces : auteur_id
+AuthUser "1" --> "0..*" app_logs : user_id
+
+@enduml

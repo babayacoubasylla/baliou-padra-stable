@@ -1,0 +1,100 @@
+@startuml
+title Cas d'utilisation par rôle - Baliou Padra
+
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Membre" as Membre
+actor "Chef Génération" as Chef
+actor "Trésorier" as Tresorier
+actor "Comité Communication Génération" as ComGen
+actor "Agent RH" as RH
+actor "Responsable BD" as RespBD
+actor "Bureau Central\nbaliou_padra" as Bureau
+actor "Super Admin" as SuperAdmin
+actor "Agent État Civil" as Civil
+
+rectangle "Plateforme Baliou Padra" {
+  usecase "S'inscrire" as UC1
+  usecase "Se connecter" as UC2
+  usecase "Voir / modifier son profil" as UC3
+  usecase "Voir ses cotisations" as UC4
+  usecase "Consulter actualités\nbibliothèque, histoire" as UC5
+
+  usecase "Valider membres\nde sa génération" as UC6
+  usecase "Voir membres\nde sa génération" as UC7
+  usecase "Nommer trésorier\nou comité génération" as UC8
+  usecase "Répondre au budget\nde génération" as UC9
+
+  usecase "Saisir cotisation\nmembre génération" as UC10
+  usecase "Voir finances génération" as UC11
+  usecase "Répondre au budget\ncomme trésorier" as UC12
+
+  usecase "Publier annonce\ngénération" as UC13
+
+  usecase "Voir annuaire / stats RH" as UC14
+
+  usecase "Gérer base de données" as UC15
+  usecase "Filtrer / exporter membres" as UC16
+  usecase "Modifier rôles / statuts" as UC17
+
+  usecase "Créer budget génération" as UC18
+  usecase "Valider budget BC" as UC19
+  usecase "Créer dépenses centrales" as UC20
+  usecase "Voir reversements" as UC21
+  usecase "Publier annonces publiques" as UC22
+  usecase "Voir statistiques globales" as UC23
+
+  usecase "Gérer système" as UC24
+  usecase "Gérer état civil" as UC25
+}
+
+Membre --> UC1
+Membre --> UC2
+Membre --> UC3
+Membre --> UC4
+Membre --> UC5
+
+Chef --> UC6
+Chef --> UC7
+Chef --> UC8
+Chef --> UC9
+Chef --> UC5
+
+Tresorier --> UC10
+Tresorier --> UC11
+Tresorier --> UC12
+Tresorier --> UC5
+
+ComGen --> UC13
+ComGen --> UC5
+
+RH --> UC14
+
+RespBD --> UC15
+RespBD --> UC16
+RespBD --> UC17
+
+Bureau --> UC18
+Bureau --> UC19
+Bureau --> UC20
+Bureau --> UC21
+Bureau --> UC22
+Bureau --> UC23
+Bureau --> UC15
+Bureau --> UC17
+
+SuperAdmin --> UC24
+SuperAdmin --> UC18
+SuperAdmin --> UC19
+SuperAdmin --> UC20
+SuperAdmin --> UC21
+SuperAdmin --> UC22
+SuperAdmin --> UC23
+SuperAdmin --> UC15
+SuperAdmin --> UC17
+
+Civil --> UC25
+
+@enduml

@@ -1,0 +1,87 @@
+@startuml
+title Modules et routes principales - Baliou Padra
+
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam componentStyle rectangle
+
+package "Routes publiques" {
+  [/] as Home
+  [/login] as Login
+  [/inscription] as Inscription
+  [/actualites] as Actualites
+  [/histoire] as Histoire
+  [/bibliotheque] as Bibliotheque
+}
+
+package "Espace membre" {
+  [/dashboard] as Dashboard
+  [/profil] as Profil
+  [/profil/editer] as ProfilEdit
+  [/finances] as Finances
+  [/annuaire] as Annuaire
+}
+
+package "Admin Central" {
+  [/admin-central] as AdminCentral
+  [/admin-central/finance] as Finance
+  [/admin-central/tresorerie] as TresorerieCentrale
+  [/admin-central/reversements] as Reversements
+  [/admin-central/stats] as Stats
+  [/admin-central/roles] as Roles
+  [/admin-central/communication] as Communication
+  [/admin-central/audit] as Audit
+}
+
+package "Admin Système" {
+  [/admin-systeme] as AdminSysteme
+}
+
+package "Responsable BD" {
+  [/gestion-base-donnees] as GestionBD
+}
+
+package "Chef Génération" {
+  [/chef-gen/dashboard] as ChefDashboard
+}
+
+package "Trésorier" {
+  [/tresorier/dashboard] as TresorierDashboard
+}
+
+package "Comité Communication Génération" {
+  [/comite-com-gen/dashboard] as ComGenDashboard
+}
+
+package "État Civil" {
+  [/etat-civil] as EtatCivil
+  [/etat-civil/naissances] as Naissances
+  [/etat-civil/mariages] as Mariages
+  [/etat-civil/deces] as Deces
+  [/etat-civil/arbre] as Arbre
+}
+
+Dashboard --> Profil
+Dashboard --> GestionBD
+Dashboard --> AdminCentral
+Dashboard --> AdminSysteme
+Dashboard --> ChefDashboard
+Dashboard --> TresorierDashboard
+Dashboard --> ComGenDashboard
+Dashboard --> EtatCivil
+Dashboard --> Annuaire
+
+AdminCentral --> Finance
+AdminCentral --> TresorerieCentrale
+AdminCentral --> Reversements
+AdminCentral --> Stats
+AdminCentral --> Roles
+AdminCentral --> Communication
+AdminCentral --> Audit
+
+EtatCivil --> Naissances
+EtatCivil --> Mariages
+EtatCivil --> Deces
+EtatCivil --> Arbre
+
+@enduml

@@ -1,0 +1,39 @@
+@startuml
+title Séquence - Cotisation saisie par trésorier
+
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Trésorier" as Tresorier
+actor "Membre" as Membre
+participant "Dashboard Trésorier" as UI
+participant "Supabase RLS" as RLS
+database "cotisations" as Cotisations
+database "membres" as Membres
+participant "Page /finances" as Finances
+
+Tresorier -> UI : sélectionne membre + type + montant
+UI -> Membres : vérifie membre de la même génération
+Membres --> UI : membre cible
+
+UI -> Cotisations : INSERT cotisation\nmembre_id = membres.id
+Cotisations -> RLS : can_manage_cotisation(membre_id)
+
+alt trésorier même génération
+  RLS --> Cotisations : autorisé
+  Cotisations --> UI : cotisation créée
+  UI --> Tresorier : confirmation
+else non autorisé
+  RLS --> Cotisations : refusé
+  Cotisations --> UI : erreur RLS
+end
+
+Membre -> Finances : ouvre /finances
+Finances -> Membres : récupère son profil
+Finances -> Cotisations : SELECT WHERE membre_id = membres.id
+Cotisations -> RLS : can_view_cotisation(membre_id)
+RLS --> Cotisations : autorisé si propriétaire
+Cotisations --> Finances : historique paiements
+Finances --> Membre : affiche historique personnel
+
+@enduml

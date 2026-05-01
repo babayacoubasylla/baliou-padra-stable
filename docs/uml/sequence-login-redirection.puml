@@ -1,0 +1,47 @@
+@startuml
+title Séquence - Connexion et redirection par rôle
+
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor Utilisateur
+participant "Page Login" as Login
+participant "Supabase Auth" as Auth
+participant "Table membres" as Membres
+participant "Dashboard Hub" as Dashboard
+participant "roleRedirect.ts" as Redirect
+
+Utilisateur -> Login : saisit email + mot de passe
+Login -> Auth : signInWithPassword()
+Auth --> Login : session utilisateur
+
+Login -> Dashboard : router.replace("/dashboard")
+
+Dashboard -> Auth : getSession()
+Auth --> Dashboard : session
+
+Dashboard -> Membres : SELECT role,generation,email\nWHERE user_id = session.user.id
+Membres --> Dashboard : profil membre
+
+Dashboard -> Redirect : getRoleRedirectPath(role)
+Redirect --> Dashboard : route cible
+
+alt super_admin
+  Dashboard -> Utilisateur : /admin-systeme
+else baliou_padra
+  Dashboard -> Utilisateur : /admin-central
+else responsable_bd
+  Dashboard -> Utilisateur : /gestion-base-donnees
+else agent_rh
+  Dashboard -> Utilisateur : /annuaire
+else chef_gen
+  Dashboard -> Utilisateur : /chef-gen/dashboard
+else tresorier
+  Dashboard -> Utilisateur : /tresorier/dashboard
+else comite_com_gen
+  Dashboard -> Utilisateur : /comite-com-gen/dashboard
+else membre
+  Dashboard -> Utilisateur : /profil
+end
+
+@enduml

@@ -1,0 +1,93 @@
+@startuml
+title Architecture globale - Plateforme Baliou Padra
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam packageStyle rectangle
+
+actor "Utilisateur Web / Mobile" as User
+actor "Administrateur" as Admin
+actor "UptimeRobot" as Uptime
+actor "Sentry" as SentryActor
+
+node "Navigateur / PWA / App Mobile" {
+  component "Interface Next.js\nReact + Tailwind" as Frontend
+  component "Service Worker PWA" as SW
+  component "Install App Button" as Install
+}
+
+cloud "Vercel" {
+  component "Next.js App Router" as NextApp
+  component "Pages publiques\nAccueil, Actualités, Histoire,\nBibliothèque, Login, Inscription" as PublicPages
+  component "Dashboard Hub\nRedirection par rôle" as Dashboard
+  component "Espaces métiers" as BusinessPages
+  component "API Routes\n/api/health\n/api/health/supabase\n/api/chat" as ApiRoutes
+}
+
+database "Supabase" {
+  component "Supabase Auth" as Auth
+  database "PostgreSQL\nTables + RLS + RPC" as DB
+  component "Storage\nImages / fichiers futurs" as Storage
+}
+
+package "Modules métier" {
+  component "Admin Central" as AdminCentral
+  component "Admin Système" as AdminSysteme
+  component "Gestion BD" as GestionBD
+  component "Chef Génération" as ChefGen
+  component "Trésorier" as Tresorier
+  component "Annuaire / Décision Stats" as Annuaire
+  component "Finances Membre" as Finances
+  component "Profil Membre" as Profil
+  component "Communication / Annonces" as Communication
+}
+
+package "Monitoring" {
+  component "Sentry SDK\nFrontend + Server" as SentrySDK
+  component "Health Check App" as HealthApp
+  component "Health Check Supabase" as HealthSupabase
+}
+
+User --> Frontend
+Admin --> Frontend
+
+Frontend --> NextApp
+Frontend --> SW
+Frontend --> Install
+
+NextApp --> PublicPages
+NextApp --> Dashboard
+NextApp --> BusinessPages
+NextApp --> ApiRoutes
+
+BusinessPages --> AdminCentral
+BusinessPages --> AdminSysteme
+BusinessPages --> GestionBD
+BusinessPages --> ChefGen
+BusinessPages --> Tresorier
+BusinessPages --> Annuaire
+BusinessPages --> Finances
+BusinessPages --> Profil
+BusinessPages --> Communication
+
+NextApp --> Auth
+NextApp --> DB
+NextApp --> Storage
+
+ApiRoutes --> DB
+ApiRoutes --> Auth
+
+Dashboard --> Auth
+Dashboard --> DB
+
+SentrySDK --> SentryActor
+NextApp --> SentrySDK
+Frontend --> SentrySDK
+
+Uptime --> HealthApp
+Uptime --> HealthSupabase
+HealthApp --> ApiRoutes
+HealthSupabase --> DB
+
+@enduml
