@@ -137,8 +137,16 @@ export default function Navbar() {
      */
     const canSeePersonalFinances = session && !estCompteGestion;
 
+    /**
+     * Masquer la Navbar globale sur l'espace BANANAKHOU.
+     * Cette page possède son propre header et son propre menu interne.
+     */
+    if (pathname?.startsWith("/gestion-base-donnees")) {
+        return null;
+    }
+
     return (
-        <nav className="bg-[#146332] text-white shadow-2xl sticky top-0 z-50 border-b-4 border-black font-black">
+        <nav className="bg-[#146332] text-white shadow-2xl sticky top-0 z-40 border-b-4 border-black font-black">
             <div className="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center gap-4">
                 {/* LOGO */}
                 <Link href="/" className="text-xl uppercase italic whitespace-nowrap">
