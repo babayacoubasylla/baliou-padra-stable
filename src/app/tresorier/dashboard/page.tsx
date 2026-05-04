@@ -23,24 +23,29 @@ import {
     AlertCircle,
 } from "lucide-react";
 
+type ActiveTab = "cotisations" | "lignes" | "budget";
+
 export default function TresorierDashboard() {
     const router = useRouter();
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<"cotisations" | "budget">("cotisations");
+    const [activeTab, setActiveTab] = useState<ActiveTab>("cotisations");
 
     const [user, setUser] = useState<any>(null);
     const [generation, setGeneration] = useState<any>(null);
 
     const [membres, setMembres] = useState<any[]>([]);
     const [cotisations, setCotisations] = useState<any[]>([]);
+    const [lignesCotisation, setLignesCotisation] = useState<any[]>([]);
+    const [engagements, setEngagements] = useState<any[]>([]);
     const [propositionsBudget, setPropositionsBudget] = useState<any[]>([]);
 
     const [stats, setStats] = useState({
-        totalSibity: 0,
+        totalSibiti: 0,
         totalMensualite: 0,
+        totalAutres: 0,
         totalGlobal: 0,
         objectif: 0,
         progression: 0,
@@ -63,19 +68,29 @@ export default function TresorierDashboard() {
     const [filterType, setFilterType] = useState("tous");
     const [filterMois, setFilterMois] = useState("tous");
 
+    const currentDate = new Date();
+    const currentMonth = currentDate.toLocaleString("fr-FR", { month: "long" });
+    const currentYear = currentDate.getFullYear();
+
     const [formData, setFormData] = useState({
         membre_id: "",
-        type: "sibity",
+        ligne_cotisation_id: "",
+        engagement_id: "",
+        type_cotisation: "sibiti",
         montant: "",
-        date_cotisation: new Date().toISOString().split("T")[0],
-        description: "",
+        date_paiement: new Date().toISOString().split("T")[0],
+        mois: currentMonth,
+        annee: currentYear.toString(),
+        notes: "",
     });
 
     const [visibilite, setVisibilite] = useState("prive");
 
     const typesCotisation = [
-        { value: "sibity", label: "📿 Sibity", montant_defaut: 5000 },
+        { value: "sibiti", label: "📿 Sibiti", montant_defaut: 3000 },
         { value: "mensualite", label: "📅 Mensualité", montant_defaut: 10000 },
+        { value: "engagement", label: "🤝 Engagement", montant_defaut: 0 },
+        { value: "extraordinaire", label: "⚡ Autre cotisation", montant_defaut: 0 },
     ];
 
     useEffect(() => {
@@ -87,21 +102,28 @@ export default function TresorierDashboard() {
         return (value ?? "").toString().trim();
     };
 
-    const isValide = (membre: any): boolean => {
-        return cleanValue(membre?.statut_validation || "en_attente") === "valide";
+    const numberValue = (value: any): number => {
+        const n = Number(value || 0);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    const formatMontant = (montant: any) => {
+        return new Intl.NumberFormat("fr-FR").format(numberValue(montant)) + " FCFA";
     };
 
     const formatDate = (date?: string | null): string => {
-        if (!date) return "";
+        if (!date) return "—";
+
         try {
             return new Date(date).toLocaleDateString("fr-FR");
         } catch {
-            return "";
+            return "—";
         }
     };
 
     const getMoisLabel = (date?: string | null): string => {
         if (!date) return "";
+
         try {
             return new Date(date).toLocaleString("fr-FR", {
                 month: "long",
@@ -112,8 +134,53 @@ export default function TresorierDashboard() {
         }
     };
 
-    const formatMontant = (montant: any) => {
-        return new Intl.NumberFormat("fr-FR").format(Number(montant || 0)) + " FCFA";
+    const getCotisationType = (cotisation: any): string => {
+        return cleanValue(cotisation?.type_cotisation || cotisation?.type).toLowerCase();
+    };
+
+    const getCotisationDate = (cotisation: any): string | null => {
+        return (
+            cotisation?.date_paiement ||
+            cotisation?.date_cotisation ||
+            cotisation?.created_at ||
+            null
+        );
+    };
+
+    const getCotisationNotes = (cotisation: any): string => {
+        return cleanValue(cotisation?.notes || cotisation?.description || "");
+    };
+
+    const getLigneTitre = (cotisation: any): string => {
+        return cleanValue(
+            cotisation?.cotisation_lignes?.titre ||
+                cotisation?.ligne_titre ||
+                ""
+        );
+    };
+
+    const getTypeLabel = (cotisation: any): string => {
+        const type = getCotisationType(cotisation);
+
+        if (type.includes("sibity") || type.includes("sibiti")) return "📿 Sibiti";
+        if (type.includes("mensualite") || type.includes("mensualité")) return "📅 Mensualité";
+        if (type.includes("engagement")) return "🤝 Engagement";
+        if (type.includes("extraordinaire")) return "⚡ Autre cotisation";
+
+        return type ? `💰 ${type}` : "💰 Cotisation";
+    };
+
+    const getLigneTypeLabel = (ligne: any) => {
+        const type = cleanValue(ligne?.type_ligne);
+
+        if (type === "sibiti") return "🌍 Sibiti global";
+        if (type === "engagement") return "🤝 Engagement libre";
+        return "💰 Cotisation";
+    };
+
+    const getLigneAmountLabel = (ligne: any) => {
+        if (ligne?.type_ligne === "engagement") return "Montant libre";
+        return formatMontant(ligne?.montant_cible);
     };
 
     const checkAuthAndLoadData = async () => {
@@ -148,6 +215,8 @@ export default function TresorierDashboard() {
         if (profile.generation) {
             await loadGenerationData(profile.generation);
             await loadMembres(profile.generation);
+            await loadLignesCotisation(profile.generation);
+            await loadEngagements(profile.generation);
             await loadCotisations(profile.generation);
             await loadPropositionsBudget(profile.generation);
         }
@@ -174,6 +243,7 @@ export default function TresorierDashboard() {
             .select("*")
             .eq("generation", generationNom)
             .eq("statut_validation", "valide")
+            .eq("est_compte_gestion", false)
             .order("nom_complet", { ascending: true });
 
         if (error) {
@@ -185,6 +255,141 @@ export default function TresorierDashboard() {
         setMembres(data || []);
     };
 
+    const loadLignesCotisation = async (generationNom: any) => {
+        const { data: lignesGlobales, error: errorGlobal } = await supabase
+            .from("cotisation_lignes")
+            .select("*")
+            .eq("scope", "global")
+            .eq("statut", "active")
+            .order("created_at", { ascending: false });
+
+        const { data: lignesGeneration, error: errorGeneration } = await supabase
+            .from("cotisation_lignes")
+            .select("*")
+            .eq("generation_nom", generationNom)
+            .eq("statut", "active")
+            .order("created_at", { ascending: false });
+
+        if (errorGlobal || errorGeneration) {
+            console.error("Erreur lignes cotisation:", errorGlobal || errorGeneration);
+            setLignesCotisation([]);
+            return;
+        }
+
+        setLignesCotisation([...(lignesGlobales || []), ...(lignesGeneration || [])]);
+    };
+
+    const loadEngagements = async (generationNom: any) => {
+        const { data: engagementsData, error: engagementsError } = await supabase
+            .from("cotisation_engagements")
+            .select("*")
+            .eq("generation_nom", generationNom)
+            .order("created_at", { ascending: false });
+
+        if (engagementsError) {
+            console.error("Erreur chargement engagements:", engagementsError);
+            setEngagements([]);
+            return;
+        }
+
+        const engagementsRaw = engagementsData || [];
+
+        if (engagementsRaw.length === 0) {
+            setEngagements([]);
+            return;
+        }
+
+        const membreIds = [
+            ...new Set(engagementsRaw.map((e) => e.membre_id).filter(Boolean)),
+        ];
+
+        const ligneIds = [
+            ...new Set(engagementsRaw.map((e) => e.ligne_cotisation_id).filter(Boolean)),
+        ];
+
+        const engagementIds = [
+            ...new Set(engagementsRaw.map((e) => e.id).filter(Boolean)),
+        ];
+
+        const { data: membresData } = await supabase
+            .from("membres")
+            .select("id, nom_complet, email, telephone, generation")
+            .in("id", membreIds);
+
+        const { data: lignesData } = await supabase
+            .from("cotisation_lignes")
+            .select("id, titre, type_ligne, generation_nom")
+            .in("id", ligneIds);
+
+        const { data: paiementsData } = await supabase
+            .from("cotisations")
+            .select("id, engagement_id, montant, statut")
+            .in("engagement_id", engagementIds);
+
+        const membresMap = new Map((membresData || []).map((m) => [Number(m.id), m]));
+        const lignesMap = new Map((lignesData || []).map((l) => [String(l.id), l]));
+
+        const paiementsParEngagement = new Map<string, number>();
+
+        (paiementsData || []).forEach((p) => {
+            const engagementId = String(p.engagement_id || "");
+            if (!engagementId) return;
+
+            const statut = cleanValue(p.statut || "valide");
+            if (statut !== "valide") return;
+
+            const montantActuel = paiementsParEngagement.get(engagementId) || 0;
+
+            paiementsParEngagement.set(
+                engagementId,
+                montantActuel + Number(p.montant || 0)
+            );
+        });
+
+        const mapped = engagementsRaw.map((e) => {
+            const membre = membresMap.get(Number(e.membre_id));
+            const ligne = lignesMap.get(String(e.ligne_cotisation_id));
+
+            const montantPropose = Number(e.montant_propose || 0);
+            const montantValide =
+                e.montant_valide !== null && e.montant_valide !== undefined
+                    ? Number(e.montant_valide)
+                    : null;
+
+            const montantAttendu = montantValide || montantPropose;
+            const montantPaye = paiementsParEngagement.get(String(e.id)) || 0;
+            const resteAPayer = Math.max(montantAttendu - montantPaye, 0);
+
+            const progression =
+                montantAttendu > 0
+                    ? Math.min((montantPaye / montantAttendu) * 100, 100)
+                    : 0;
+
+            return {
+                engagement_id: e.id,
+                ligne_id: e.ligne_cotisation_id,
+                titre: ligne?.titre || "Engagement",
+                generation_nom: e.generation_nom,
+                annee: e.annee,
+                membre_id: e.membre_id,
+                nom_complet: membre?.nom_complet || "Membre inconnu",
+                email: membre?.email || "",
+                telephone: membre?.telephone || "",
+                montant_propose: montantPropose,
+                montant_valide: montantValide,
+                montant_paye: montantPaye,
+                reste_a_payer: resteAPayer,
+                progression,
+                message_membre: e.message_membre,
+                commentaire_chef: e.commentaire_chef,
+                statut: e.statut || "en_attente",
+                created_at: e.created_at,
+            };
+        });
+
+        setEngagements(mapped);
+    };
+
     const loadCotisations = async (generationNom: any) => {
         setRefreshing(true);
 
@@ -192,7 +397,8 @@ export default function TresorierDashboard() {
             .from("membres")
             .select("id")
             .eq("generation", generationNom)
-            .eq("statut_validation", "valide");
+            .eq("statut_validation", "valide")
+            .eq("est_compte_gestion", false);
 
         if (membresError) {
             console.error("Erreur membres cotisations:", membresError);
@@ -203,34 +409,54 @@ export default function TresorierDashboard() {
 
         const membreIds = membresGen?.map((m) => m.id) || [];
 
-        if (membreIds.length > 0) {
-            const { data: cotisationsData, error: cotisationsError } = await supabase
-                .from("cotisations")
-                .select("*, membres(nom_complet)")
-                .in("membre_id", membreIds)
-                .order("date_cotisation", { ascending: false });
-
-            if (cotisationsError) {
-                console.error("Erreur cotisations:", cotisationsError);
-                setCotisations([]);
-                setRefreshing(false);
-                return;
-            }
-
-            setCotisations(cotisationsData || []);
-            await calculateStats(cotisationsData || [], membreIds);
-        } else {
+        if (membreIds.length === 0) {
             setCotisations([]);
             setStats({
-                totalSibity: 0,
+                totalSibiti: 0,
                 totalMensualite: 0,
+                totalAutres: 0,
                 totalGlobal: 0,
                 objectif: generation?.objectif_annuel || 0,
                 progression: 0,
                 membresActifs: 0,
                 tauxParticipation: 0,
             });
+            setRefreshing(false);
+            return;
         }
+
+        const { data, error } = await supabase
+            .from("cotisations")
+            .select(
+                "*, membres(nom_complet,email), cotisation_lignes(titre,montant_cible,type_ligne,scope), cotisation_engagements(id,statut,montant_propose,montant_valide)"
+            )
+            .in("membre_id", membreIds)
+            .order("date_paiement", { ascending: false });
+
+        if (error) {
+            console.warn("Fallback cotisations sans relations:", error.message);
+
+            const fallback = await supabase
+                .from("cotisations")
+                .select("*")
+                .in("membre_id", membreIds)
+                .order("date_paiement", { ascending: false });
+
+            if (fallback.error) {
+                console.error("Erreur cotisations:", fallback.error);
+                setCotisations([]);
+                setRefreshing(false);
+                return;
+            }
+
+            setCotisations(fallback.data || []);
+            await calculateStats(fallback.data || [], membreIds);
+            setRefreshing(false);
+            return;
+        }
+
+        setCotisations(data || []);
+        await calculateStats(data || [], membreIds);
 
         setRefreshing(false);
     };
@@ -257,28 +483,38 @@ export default function TresorierDashboard() {
         if (!user?.generation) return;
 
         setRefreshing(true);
+
         await loadMembres(user.generation);
+        await loadLignesCotisation(user.generation);
+        await loadEngagements(user.generation);
         await loadCotisations(user.generation);
         await loadPropositionsBudget(user.generation);
+
         setRefreshing(false);
     };
 
     const calculateStats = async (cotisationsData: any[], membreIds: any[]) => {
-        let totalSibity = 0;
+        let totalSibiti = 0;
         let totalMensualite = 0;
+        let totalAutres = 0;
         const membresPayeurs = new Set();
 
         cotisationsData.forEach((c) => {
-            if (c.type === "sibity") {
-                totalSibity += Number(c.montant || 0);
-            } else if (c.type === "mensualite") {
-                totalMensualite += Number(c.montant || 0);
+            const type = getCotisationType(c);
+            const montant = numberValue(c.montant);
+
+            if (type.includes("sibity") || type.includes("sibiti")) {
+                totalSibiti += montant;
+            } else if (type.includes("mensualite") || type.includes("mensualité")) {
+                totalMensualite += montant;
+            } else {
+                totalAutres += montant;
             }
 
             membresPayeurs.add(c.membre_id);
         });
 
-        const totalGlobal = totalSibity + totalMensualite;
+        const totalGlobal = totalSibiti + totalMensualite + totalAutres;
         const objectif = generation?.objectif_annuel || 5000000;
         const progression = objectif > 0 ? (totalGlobal / objectif) * 100 : 0;
         const membresActifs = membresPayeurs.size;
@@ -286,8 +522,9 @@ export default function TresorierDashboard() {
             membreIds.length > 0 ? (membresActifs / membreIds.length) * 100 : 0;
 
         setStats({
-            totalSibity,
+            totalSibiti,
             totalMensualite,
+            totalAutres,
             totalGlobal,
             objectif,
             progression,
@@ -296,23 +533,80 @@ export default function TresorierDashboard() {
         });
     };
 
+    const resetForm = () => {
+        setFormData({
+            membre_id: "",
+            ligne_cotisation_id: "",
+            engagement_id: "",
+            type_cotisation: "sibiti",
+            montant: "",
+            date_paiement: new Date().toISOString().split("T")[0],
+            mois: currentMonth,
+            annee: currentYear.toString(),
+            notes: "",
+        });
+    };
+
+    const activeEngagementsForSelectedMember = engagements.filter((e) => {
+        if (!formData.membre_id) return false;
+
+        const sameMember = Number(e.membre_id) === Number(formData.membre_id);
+        const isActive = cleanValue(e.statut) === "actif";
+
+        if (!formData.ligne_cotisation_id) {
+            return sameMember && isActive;
+        }
+
+        const sameLine = String(e.ligne_id) === String(formData.ligne_cotisation_id);
+
+        return sameMember && isActive && sameLine;
+    });
+
     const handleAjouterCotisation = async (e: any) => {
         e.preventDefault();
 
-        if (!formData.membre_id || !formData.montant) {
-            alert("Veuillez remplir tous les champs obligatoires");
+        if (!formData.membre_id) {
+            alert("Veuillez sélectionner un membre.");
             return;
         }
 
-        const { error } = await supabase.from("cotisations").insert([
-            {
-                membre_id: Number(formData.membre_id),
-                type: formData.type,
-                montant: parseInt(formData.montant),
-                date_cotisation: formData.date_cotisation,
-                description: formData.description || null,
-            },
-        ]);
+        if (!formData.ligne_cotisation_id) {
+            alert("Veuillez sélectionner une ligne de cotisation.");
+            return;
+        }
+
+        if (!formData.montant) {
+            alert("Veuillez saisir le montant payé.");
+            return;
+        }
+
+        const selectedLine = lignesCotisation.find(
+            (l) => String(l.id) === String(formData.ligne_cotisation_id)
+        );
+
+        if (!selectedLine) {
+            alert("Ligne de cotisation introuvable.");
+            return;
+        }
+
+        if (selectedLine.type_ligne === "engagement" && !formData.engagement_id) {
+            alert("Veuillez sélectionner l'engagement actif du membre.");
+            return;
+        }
+
+        const { data, error } = await supabase.rpc("enregistrer_cotisation_generation", {
+            p_membre_id: Number(formData.membre_id),
+            p_ligne_cotisation_id: formData.ligne_cotisation_id,
+            p_montant: Number(formData.montant),
+            p_type_cotisation: formData.type_cotisation,
+            p_mois: formData.mois || null,
+            p_annee: formData.annee ? Number(formData.annee) : currentYear,
+            p_date_paiement: formData.date_paiement || null,
+            p_notes: formData.notes || null,
+            p_engagement_id: formData.engagement_id || null,
+        });
+
+        console.log("Cotisation enregistrée:", { data, error });
 
         if (error) {
             alert("Erreur: " + error.message);
@@ -320,25 +614,18 @@ export default function TresorierDashboard() {
         }
 
         alert("Cotisation enregistrée avec succès !");
-        setShowAjoutModal(false);
-        setFormData({
-            membre_id: "",
-            type: "sibity",
-            montant: "",
-            date_cotisation: new Date().toISOString().split("T")[0],
-            description: "",
-        });
 
+        setShowAjoutModal(false);
+        resetForm();
+
+        await loadEngagements(user.generation);
         await loadCotisations(user.generation);
     };
 
     const handleSupprimerCotisation = async (cotisationId: any) => {
         if (!confirm("Êtes-vous sûr de vouloir supprimer cette cotisation ?")) return;
 
-        const { error } = await supabase
-            .from("cotisations")
-            .delete()
-            .eq("id", cotisationId);
+        const { error } = await supabase.from("cotisations").delete().eq("id", cotisationId);
 
         if (error) {
             alert("Erreur: " + error.message);
@@ -346,6 +633,8 @@ export default function TresorierDashboard() {
         }
 
         alert("Cotisation supprimée");
+
+        await loadEngagements(user.generation);
         await loadCotisations(user.generation);
     };
 
@@ -354,23 +643,153 @@ export default function TresorierDashboard() {
 
         setFormData({
             ...formData,
-            type,
-            montant: typeInfo?.montant_defaut?.toString() || "",
+            type_cotisation: type,
+            montant: typeInfo?.montant_defaut ? typeInfo.montant_defaut.toString() : "",
         });
     };
 
+    const handleLigneChange = (ligneId: string) => {
+        const ligne = lignesCotisation.find((l) => String(l.id) === String(ligneId));
+
+        if (!ligne) {
+            setFormData({
+                ...formData,
+                ligne_cotisation_id: "",
+                engagement_id: "",
+                montant: "",
+            });
+            return;
+        }
+
+        let nextType = formData.type_cotisation;
+        let nextMontant = formData.montant;
+        let nextNotes = formData.notes;
+
+        if (ligne.type_ligne === "sibiti") {
+            nextType = "sibiti";
+            nextMontant = "3000";
+            nextNotes = "Paiement Sibiti";
+        } else if (ligne.type_ligne === "cotisation") {
+            nextType = "extraordinaire";
+            nextMontant = ligne.montant_cible ? String(ligne.montant_cible) : "";
+            nextNotes = ligne.titre ? `Paiement pour : ${ligne.titre}` : "";
+        } else if (ligne.type_ligne === "engagement") {
+            nextType = "engagement";
+            nextMontant = "";
+            nextNotes = ligne.titre ? `Paiement engagement : ${ligne.titre}` : "";
+        }
+
+        setFormData({
+            ...formData,
+            ligne_cotisation_id: ligneId,
+            engagement_id: "",
+            type_cotisation: nextType,
+            montant: nextMontant,
+            notes: nextNotes,
+        });
+    };
+
+    const handleEngagementChange = (engagementId: string) => {
+        const engagement = engagements.find((e) => e.engagement_id === engagementId);
+
+        if (!engagement) {
+            setFormData({
+                ...formData,
+                engagement_id: "",
+            });
+            return;
+        }
+
+        const reste = Number(engagement.reste_a_payer || 0);
+        const montant = reste > 0 ? String(reste) : "";
+
+        setFormData({
+            ...formData,
+            engagement_id: engagementId,
+            ligne_cotisation_id: engagement.ligne_id,
+            type_cotisation: "engagement",
+            montant,
+            notes: `Paiement engagement : ${engagement.titre}`,
+        });
+    };
+
+    const handleActiverEngagement = async (engagement: any) => {
+        const montantInput = window.prompt(
+            `Montant à valider pour ${engagement.nom_complet}`,
+            String(engagement.montant_propose || "")
+        );
+
+        if (montantInput === null) return;
+
+        const montantValide = Number(montantInput);
+
+        if (!montantValide || montantValide <= 0) {
+            alert("Montant invalide.");
+            return;
+        }
+
+        const commentaire = window.prompt("Commentaire optionnel", "");
+
+        const { data, error } = await supabase.rpc("activer_engagement_generation", {
+            p_engagement_id: engagement.engagement_id,
+            p_montant_valide: montantValide,
+            p_commentaire: commentaire || null,
+        });
+
+        console.log("Activation engagement trésorier:", { data, error });
+
+        if (error) {
+            alert("Erreur activation engagement : " + error.message);
+            return;
+        }
+
+        alert("Engagement activé avec succès.");
+
+        await loadEngagements(user.generation);
+        await loadCotisations(user.generation);
+    };
+
+    const handleRejeterEngagement = async (engagement: any) => {
+        const commentaire = window.prompt(
+            `Motif du rejet pour ${engagement.nom_complet}`,
+            ""
+        );
+
+        if (commentaire === null) return;
+
+        const { data, error } = await supabase.rpc("rejeter_engagement_generation", {
+            p_engagement_id: engagement.engagement_id,
+            p_commentaire: commentaire || null,
+        });
+
+        console.log("Rejet engagement trésorier:", { data, error });
+
+        if (error) {
+            alert("Erreur rejet engagement : " + error.message);
+            return;
+        }
+
+        alert("Engagement rejeté.");
+
+        await loadEngagements(user.generation);
+        await loadCotisations(user.generation);
+    };
+
     const getMembreNom = (membreId: any) => {
-        const membre = membres.find((m) => m.id === membreId);
+        const membre = membres.find((m) => Number(m.id) === Number(membreId));
         return membre?.nom_complet || "Inconnu";
     };
 
     const exportCotisations = () => {
         const data = cotisationsFiltered.map((c: any) => ({
-            Date: formatDate(c.date_cotisation),
-            Membre: c.membres?.nom_complet || "Inconnu",
-            Type: c.type === "sibity" ? "Sibity" : "Mensualité",
+            Date: formatDate(getCotisationDate(c)),
+            Membre: c.membres?.nom_complet || getMembreNom(c.membre_id),
+            Ligne: getLigneTitre(c) || "",
+            Type: getTypeLabel(c),
             Montant: c.montant,
-            Description: c.description || "",
+            Mois: c.mois || "",
+            Annee: c.annee || "",
+            Notes: getCotisationNotes(c) || "",
         }));
 
         if (data.length === 0) return;
@@ -418,22 +837,14 @@ export default function TresorierDashboard() {
                 </div>
                 <div class="content">
                     <h2>REÇU DE COTISATION</h2>
-                    <div class="field"><span class="label">Date :</span> ${formatDate(
-            cotisation.date_cotisation
-        )}</div>
-                    <div class="field"><span class="label">Membre :</span> ${cotisation.membres?.nom_complet || "Inconnu"
-            }</div>
-                    <div class="field"><span class="label">Génération :</span> ${user?.generation || ""
-            }</div>
-                    <div class="field"><span class="label">Type :</span> ${cotisation.type === "sibity" ? "Sibity" : "Mensualité"
-            }</div>
-                    <div class="field"><span class="label">Montant :</span> ${formatMontant(
-                cotisation.montant
-            )}</div>
-                    ${cotisation.description
-                ? `<div class="field"><span class="label">Description :</span> ${cotisation.description}</div>`
-                : ""
-            }
+                    <div class="field"><span class="label">Date :</span> ${formatDate(getCotisationDate(cotisation))}</div>
+                    <div class="field"><span class="label">Membre :</span> ${cotisation.membres?.nom_complet || getMembreNom(cotisation.membre_id)}</div>
+                    <div class="field"><span class="label">Génération :</span> ${user?.generation || ""}</div>
+                    ${getLigneTitre(cotisation) ? `<div class="field"><span class="label">Ligne :</span> ${getLigneTitre(cotisation)}</div>` : ""}
+                    <div class="field"><span class="label">Type :</span> ${getTypeLabel(cotisation)}</div>
+                    <div class="field"><span class="label">Montant :</span> ${formatMontant(cotisation.montant)}</div>
+                    ${cotisation.mois || cotisation.annee ? `<div class="field"><span class="label">Période :</span> ${cotisation.mois || ""} ${cotisation.annee || ""}</div>` : ""}
+                    ${getCotisationNotes(cotisation) ? `<div class="field"><span class="label">Notes :</span> ${getCotisationNotes(cotisation)}</div>` : ""}
                 </div>
                 <div class="footer">
                     Merci pour votre contribution à la communauté
@@ -460,12 +871,18 @@ export default function TresorierDashboard() {
             return;
         }
 
-        const { data, error } = await supabase.rpc("repondre_budget_generation", {
-            p_proposition_id: Number(prop.id),
-            p_action: "accepte",
-            p_montant_corrige: null,
-            p_commentaire: null,
-        });
+        const { data, error } = await supabase
+            .from("propositions_budgetaires")
+            .update({
+                statut_chef: "accepte",
+                commentaire_chef: null,
+                date_reponse: new Date().toISOString(),
+                valide_par_membre_id: user?.id || null,
+                valide_par_role: user?.role || "tresorier",
+            })
+            .eq("id", prop.id)
+            .select()
+            .maybeSingle();
 
         if (error) {
             console.error("Erreur acceptation budget:", error);
@@ -490,12 +907,19 @@ export default function TresorierDashboard() {
             return;
         }
 
-        const { data, error } = await supabase.rpc("repondre_budget_generation", {
-            p_proposition_id: Number(selectedProposition.id),
-            p_action: "negociation",
-            p_montant_corrige: Number(montantNegocie),
-            p_commentaire: commentaireNegocie || null,
-        });
+        const { data, error } = await supabase
+            .from("propositions_budgetaires")
+            .update({
+                statut_chef: "negociation",
+                montant_corrige: Number(montantNegocie),
+                commentaire_chef: commentaireNegocie || null,
+                date_reponse: new Date().toISOString(),
+                valide_par_membre_id: user?.id || null,
+                valide_par_role: user?.role || "tresorier",
+            })
+            .eq("id", selectedProposition.id)
+            .select()
+            .maybeSingle();
 
         if (error) {
             console.error("Erreur négociation budget:", error);
@@ -525,12 +949,19 @@ export default function TresorierDashboard() {
             return;
         }
 
-        const { data, error } = await supabase.rpc("repondre_budget_generation", {
-            p_proposition_id: Number(selectedProposition.id),
-            p_action: "rejete",
-            p_montant_corrige: null,
-            p_commentaire: commentaireRejet,
-        });
+        const { data, error } = await supabase
+            .from("propositions_budgetaires")
+            .update({
+                statut_chef: "rejete",
+                montant_corrige: null,
+                commentaire_chef: commentaireRejet,
+                date_reponse: new Date().toISOString(),
+                valide_par_membre_id: user?.id || null,
+                valide_par_role: user?.role || "tresorier",
+            })
+            .eq("id", selectedProposition.id)
+            .select()
+            .maybeSingle();
 
         if (error) {
             console.error("Erreur rejet budget:", error);
@@ -608,24 +1039,67 @@ export default function TresorierDashboard() {
         );
     };
 
+    const getEngagementBadge = (statut?: string | null) => {
+        const value = cleanValue(statut || "en_attente");
+
+        if (value === "actif") {
+            return (
+                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-black">
+                    ✅ Actif
+                </span>
+            );
+        }
+
+        if (value === "rejete") {
+            return (
+                <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-black">
+                    ❌ Rejeté
+                </span>
+            );
+        }
+
+        if (value === "cloture") {
+            return (
+                <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-black">
+                    🔒 Clôturé
+                </span>
+            );
+        }
+
+        return (
+            <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-black">
+                ⏳ En attente
+            </span>
+        );
+    };
+
     const cotisationsFiltered = cotisations.filter((c) => {
         const matchSearch =
             searchTerm === "" ||
-            c.membres?.nom_complet?.toLowerCase().includes(searchTerm.toLowerCase());
+            c.membres?.nom_complet?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            getMembreNom(c.membre_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+            getLigneTitre(c).toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchType = filterType === "tous" || c.type === filterType;
+        const type = getCotisationType(c);
+
+        const matchType =
+            filterType === "tous" ||
+            type === filterType ||
+            (filterType === "mensualite" &&
+                (type.includes("mensualite") || type.includes("mensualité"))) ||
+            (filterType === "sibity" &&
+                (type.includes("sibity") || type.includes("sibiti"))) ||
+            (filterType === "engagement" && type.includes("engagement"));
 
         const matchMois =
-            filterMois === "tous" || getMoisLabel(c.date_cotisation) === filterMois;
+            filterMois === "tous" || getMoisLabel(getCotisationDate(c)) === filterMois;
 
         return matchSearch && matchType && matchMois;
     });
 
     const moisUniques = [
         ...new Set(
-            cotisations
-                .map((c) => getMoisLabel(c.date_cotisation))
-                .filter(Boolean)
+            cotisations.map((c) => getMoisLabel(getCotisationDate(c))).filter(Boolean)
         ),
     ];
 
@@ -713,55 +1187,51 @@ export default function TresorierDashboard() {
                     )}
                 </div>
 
+                {/* Lignes disponibles */}
+                <div className="bg-blue-50 border-4 border-blue-700 rounded-2xl p-4 mb-6">
+                    <h2 className="font-black text-blue-900 uppercase text-sm mb-2">
+                        🎯 Lignes de cotisation actives
+                    </h2>
+
+                    {lignesCotisation.length === 0 ? (
+                        <p className="text-sm font-bold text-blue-800">
+                            Aucune ligne active créée par le chef de génération.
+                        </p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {lignesCotisation.map((ligne) => (
+                                <div
+                                    key={ligne.id}
+                                    className="bg-white border-2 border-blue-700 rounded-xl p-3"
+                                >
+                                    <p className="font-black text-blue-900">{ligne.titre}</p>
+
+                                    <p className="text-xs font-black text-black/50 uppercase mt-1">
+                                        {ligne.scope === "global" ? "🌍 Global" : "Génération"} •{" "}
+                                        {getLigneTypeLabel(ligne)}
+                                    </p>
+
+                                    <p className="text-sm font-black text-green-700 mt-1">
+                                        {getLigneAmountLabel(ligne)}
+                                    </p>
+
+                                    {ligne.date_limite && (
+                                        <p className="text-[10px] text-gray-500 font-bold">
+                                            Limite : {formatDate(ligne.date_limite)}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
                 {/* KPI */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-white border-4 border-black rounded-2xl p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                            <DollarSign size={18} className="text-black" />
-                            <p className="text-xs font-black uppercase text-black/50">
-                                Total Sibity
-                            </p>
-                        </div>
-                        <p className="text-xl font-black text-black">
-                            {formatMontant(stats.totalSibity)}
-                        </p>
-                    </div>
-
-                    <div className="bg-white border-4 border-black rounded-2xl p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                            <CreditCard size={18} className="text-black" />
-                            <p className="text-xs font-black uppercase text-black/50">
-                                Total Mensualités
-                            </p>
-                        </div>
-                        <p className="text-xl font-black text-black">
-                            {formatMontant(stats.totalMensualite)}
-                        </p>
-                    </div>
-
-                    <div className="bg-white border-4 border-black rounded-2xl p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Landmark size={18} className="text-black" />
-                            <p className="text-xs font-black uppercase text-black/50">
-                                Collecte globale
-                            </p>
-                        </div>
-                        <p className="text-xl font-black text-black">
-                            {formatMontant(stats.totalGlobal)}
-                        </p>
-                    </div>
-
-                    <div className="bg-white border-4 border-black rounded-2xl p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Users size={18} className="text-black" />
-                            <p className="text-xs font-black uppercase text-black/50">
-                                Taux participation
-                            </p>
-                        </div>
-                        <p className="text-xl font-black text-black">
-                            {stats.tauxParticipation.toFixed(0)}%
-                        </p>
-                    </div>
+                    <KpiBox icon={<DollarSign size={18} />} title="Total Sibiti" value={formatMontant(stats.totalSibity)} />
+                    <KpiBox icon={<CreditCard size={18} />} title="Total Mensualités" value={formatMontant(stats.totalMensualite)} />
+                    <KpiBox icon={<Landmark size={18} />} title="Collecte globale" value={formatMontant(stats.totalGlobal)} />
+                    <KpiBox icon={<Users size={18} />} title="Taux participation" value={`${stats.tauxParticipation.toFixed(0)}%`} />
                 </div>
 
                 {/* Progression */}
@@ -791,29 +1261,29 @@ export default function TresorierDashboard() {
                 </div>
 
                 {/* Onglets */}
-                <div className="flex gap-3 mb-6 border-b-4 border-black">
-                    <button
+                <div className="flex flex-wrap gap-3 mb-6 border-b-4 border-black">
+                    <TabButton
+                        active={activeTab === "cotisations"}
                         onClick={() => setActiveTab("cotisations")}
-                        className={`px-6 py-3 font-black uppercase rounded-t-2xl ${activeTab === "cotisations"
-                                ? "bg-black text-white"
-                                : "bg-gray-100 text-black"
-                            }`}
                     >
                         💰 Cotisations
-                    </button>
+                    </TabButton>
 
-                    <button
+                    <TabButton
+                        active={activeTab === "lignes"}
+                        onClick={() => setActiveTab("lignes")}
+                    >
+                        🎯 Lignes & Engagements ({lignesCotisation.length})
+                    </TabButton>
+
+                    <TabButton
+                        active={activeTab === "budget"}
                         onClick={() => setActiveTab("budget")}
-                        className={`px-6 py-3 font-black uppercase rounded-t-2xl ${activeTab === "budget"
-                                ? "bg-black text-white"
-                                : "bg-gray-100 text-black"
-                            }`}
                     >
                         📋 Budget génération ({propositionsBudget.length})
-                    </button>
+                    </TabButton>
                 </div>
 
-                {/* Onglet Cotisations */}
                 {activeTab === "cotisations" && (
                     <>
                         {/* Filtres */}
@@ -830,7 +1300,7 @@ export default function TresorierDashboard() {
                                         />
                                         <input
                                             type="text"
-                                            placeholder="Membre..."
+                                            placeholder="Membre ou ligne..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                             className="w-full pl-10 pr-3 py-2 border-4 border-black rounded-xl font-black text-sm text-black bg-white focus:bg-yellow-50 outline-none"
@@ -848,8 +1318,10 @@ export default function TresorierDashboard() {
                                         className="w-full p-2 border-4 border-black rounded-xl font-black text-sm text-black bg-white focus:bg-yellow-50 outline-none"
                                     >
                                         <option value="tous">Tous les types</option>
-                                        <option value="sibity">📿 Sibity</option>
+                                        <option value="sibity">📿 Sibiti</option>
                                         <option value="mensualite">📅 Mensualité</option>
+                                        <option value="engagement">🤝 Engagement</option>
+                                        <option value="extraordinaire">⚡ Autre cotisation</option>
                                     </select>
                                 </div>
 
@@ -919,6 +1391,9 @@ export default function TresorierDashboard() {
                                                     Membre
                                                 </th>
                                                 <th className="p-3 text-left font-black text-sm">
+                                                    Ligne
+                                                </th>
+                                                <th className="p-3 text-left font-black text-sm">
                                                     Type
                                                 </th>
                                                 <th className="p-3 text-right font-black text-sm">
@@ -937,21 +1412,30 @@ export default function TresorierDashboard() {
                                                     className="border-b border-black/10 hover:bg-gray-50 transition-colors"
                                                 >
                                                     <td className="p-3 text-black/60 text-sm">
-                                                        {formatDate(cotisation.date_cotisation)}
+                                                        {formatDate(getCotisationDate(cotisation))}
                                                     </td>
                                                     <td className="p-3 font-black text-black">
-                                                        {cotisation.membres?.nom_complet || "Inconnu"}
+                                                        {cotisation.membres?.nom_complet ||
+                                                            getMembreNom(cotisation.membre_id)}
+                                                    </td>
+                                                    <td className="p-3 text-xs font-black text-blue-700">
+                                                        {getLigneTitre(cotisation) || "—"}
                                                     </td>
                                                     <td className="p-3">
                                                         <span
-                                                            className={`text-xs px-2 py-1 rounded-full font-black ${cotisation.type === "sibity"
+                                                            className={`text-xs px-2 py-1 rounded-full font-black ${
+                                                                getCotisationType(cotisation).includes("sibity") ||
+                                                                getCotisationType(cotisation).includes("sibiti")
                                                                     ? "bg-purple-100 text-purple-800"
-                                                                    : "bg-blue-100 text-blue-800"
-                                                                }`}
+                                                                    : getCotisationType(cotisation).includes("mensualite") ||
+                                                                      getCotisationType(cotisation).includes("mensualité")
+                                                                    ? "bg-blue-100 text-blue-800"
+                                                                    : getCotisationType(cotisation).includes("engagement")
+                                                                    ? "bg-orange-100 text-orange-800"
+                                                                    : "bg-gray-100 text-gray-800"
+                                                            }`}
                                                         >
-                                                            {cotisation.type === "sibity"
-                                                                ? "📿 Sibity"
-                                                                : "📅 Mensualité"}
+                                                            {getTypeLabel(cotisation)}
                                                         </span>
                                                     </td>
                                                     <td className="p-3 text-right font-black text-black">
@@ -997,6 +1481,190 @@ export default function TresorierDashboard() {
                             )}
                         </div>
                     </>
+                )}
+
+                {/* Onglet Lignes & Engagements */}
+                {activeTab === "lignes" && (
+                    <div className="space-y-6">
+                        <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
+                            <div className="bg-black p-4">
+                                <h2 className="text-white font-black uppercase text-sm">
+                                    🎯 Lignes de cotisation de ma génération
+                                </h2>
+                            </div>
+
+                            {lignesCotisation.length === 0 ? (
+                                <div className="p-10 text-center text-black/60 font-black italic">
+                                    Aucune ligne de cotisation active.
+                                </div>
+                            ) : (
+                                <div className="divide-y-2 divide-black/10">
+                                    {lignesCotisation.map((ligne) => (
+                                        <div
+                                            key={ligne.id}
+                                            className="p-5 flex justify-between items-start gap-4"
+                                        >
+                                            <div>
+                                                <p className="font-black text-black text-lg">
+                                                    {ligne.titre}
+                                                </p>
+
+                                                <p className="text-sm text-black/60">
+                                                    {ligne.description || "—"}
+                                                </p>
+
+                                                <p className="text-xs text-black/50 mt-1">
+                                                    Type : {getLigneTypeLabel(ligne)} • Année :{" "}
+                                                    {ligne.annee}
+                                                    {ligne.date_limite
+                                                        ? ` • Limite : ${formatDate(ligne.date_limite)}`
+                                                        : ""}
+                                                </p>
+
+                                                {ligne.scope === "global" && (
+                                                    <p className="text-xs font-black text-green-700 mt-1">
+                                                        🌍 Ligne globale applicable à tous les membres
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="text-right">
+                                                <p className="font-black text-green-700 text-lg">
+                                                    {getLigneAmountLabel(ligne)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
+                            <div className="bg-black p-4">
+                                <h2 className="text-white font-black uppercase text-sm">
+                                    🤝 Engagements des membres de ma génération
+                                </h2>
+                            </div>
+
+                            {engagements.length === 0 ? (
+                                <div className="p-10 text-center text-black/60 font-black italic">
+                                    Aucun engagement proposé pour le moment.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-100">
+                                            <tr>
+                                                <th className="p-3 text-left font-black text-sm">
+                                                    Membre
+                                                </th>
+                                                <th className="p-3 text-left font-black text-sm">
+                                                    Ligne
+                                                </th>
+                                                <th className="p-3 text-right font-black text-sm">
+                                                    Proposé
+                                                </th>
+                                                <th className="p-3 text-right font-black text-sm">
+                                                    Validé
+                                                </th>
+                                                <th className="p-3 text-right font-black text-sm">
+                                                    Payé
+                                                </th>
+                                                <th className="p-3 text-center font-black text-sm">
+                                                    Progression
+                                                </th>
+                                                <th className="p-3 text-center font-black text-sm">
+                                                    Statut
+                                                </th>
+                                                <th className="p-3 text-center font-black text-sm">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {engagements.map((e) => (
+                                                <tr key={e.engagement_id} className="border-b border-black/10">
+                                                    <td className="p-3">
+                                                        <p className="font-black text-black">
+                                                            {e.nom_complet}
+                                                        </p>
+                                                        <p className="text-xs text-black/50">{e.email}</p>
+                                                        <p className="text-xs text-black/50">
+                                                            {e.telephone}
+                                                        </p>
+                                                    </td>
+
+                                                    <td className="p-3 font-bold text-black">
+                                                        {e.titre}
+                                                    </td>
+
+                                                    <td className="p-3 text-right font-black text-orange-700">
+                                                        {formatMontant(e.montant_propose)}
+                                                    </td>
+
+                                                    <td className="p-3 text-right font-black text-green-700">
+                                                        {e.montant_valide
+                                                            ? formatMontant(e.montant_valide)
+                                                            : "—"}
+                                                    </td>
+
+                                                    <td className="p-3 text-right font-black text-blue-700">
+                                                        {formatMontant(e.montant_paye)}
+                                                    </td>
+
+                                                    <td className="p-3 text-center">
+                                                        <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                                                            <div
+                                                                className="bg-green-500 h-2 rounded-full"
+                                                                style={{
+                                                                    width: `${Math.min(
+                                                                        100,
+                                                                        Number(e.progression || 0)
+                                                                    )}%`,
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                        <span className="text-xs font-black">
+                                                            {Number(e.progression || 0).toFixed(0)}%
+                                                        </span>
+                                                    </td>
+
+                                                    <td className="p-3 text-center">
+                                                        {getEngagementBadge(e.statut)}
+                                                    </td>
+
+                                                    <td className="p-3 text-center">
+                                                        {e.statut === "en_attente" ? (
+                                                            <div className="flex justify-center gap-2">
+                                                                <button
+                                                                    onClick={() => handleActiverEngagement(e)}
+                                                                    className="bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-black"
+                                                                >
+                                                                    Activer
+                                                                </button>
+
+                                                                <button
+                                                                    onClick={() => handleRejeterEngagement(e)}
+                                                                    className="bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-black"
+                                                                >
+                                                                    Rejeter
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-black/50 font-black">
+                                                                Traité
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )}
 
                 {/* Onglet Budget */}
@@ -1056,18 +1724,13 @@ export default function TresorierDashboard() {
                                                 statutGeneration === "";
 
                                             return (
-                                                <tr
-                                                    key={prop.id}
-                                                    className="border-b border-black/10"
-                                                >
+                                                <tr key={prop.id} className="border-b border-black/10">
                                                     <td className="p-3 font-black text-black">
                                                         {prop.generation_nom}
                                                     </td>
-                                                    <td className="p-3 text-black">
-                                                        {prop.annee}
-                                                    </td>
+                                                    <td className="p-3 text-black">{prop.annee}</td>
                                                     <td className="p-3 font-black text-green-600">
-                                                        {formatMontant(prop.montant_propose)}
+                                                        {formatMontant(prop.montant_corrige || prop.montant_propose)}
                                                     </td>
                                                     <td className="p-3">
                                                         {getStatutBCBadge(prop.statut_bc)}
@@ -1079,20 +1742,12 @@ export default function TresorierDashboard() {
                                                                 Par : {prop.valide_par_role}
                                                             </p>
                                                         )}
-                                                        {prop.montant_corrige && (
-                                                            <p className="text-[10px] text-orange-700 mt-1 font-bold">
-                                                                Montant proposé :{" "}
-                                                                {formatMontant(prop.montant_corrige)}
-                                                            </p>
-                                                        )}
                                                     </td>
                                                     <td className="p-3 text-center">
                                                         {peutRepondre ? (
                                                             <div className="flex justify-center gap-2">
                                                                 <button
-                                                                    onClick={() =>
-                                                                        handleAccepterBudget(prop)
-                                                                    }
+                                                                    onClick={() => handleAccepterBudget(prop)}
                                                                     className="bg-green-600 text-white px-3 py-2 rounded-xl font-black text-xs hover:bg-green-700"
                                                                 >
                                                                     ✅ Accepter
@@ -1169,6 +1824,8 @@ export default function TresorierDashboard() {
                                         setFormData({
                                             ...formData,
                                             membre_id: e.target.value,
+                                            engagement_id: "",
+                                            ligne_cotisation_id: "",
                                         })
                                     }
                                     className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
@@ -1185,10 +1842,55 @@ export default function TresorierDashboard() {
 
                             <div>
                                 <label className="block text-black font-black mb-1">
+                                    Ligne de cotisation *
+                                </label>
+                                <select
+                                    value={formData.ligne_cotisation_id}
+                                    onChange={(e) => handleLigneChange(e.target.value)}
+                                    className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    required
+                                >
+                                    <option value="">-- Sélectionner une ligne de cotisation --</option>
+                                    {lignesCotisation.map((ligne) => (
+                                        <option key={ligne.id} value={ligne.id}>
+                                            {ligne.titre} —{" "}
+                                            {ligne.type_ligne === "engagement"
+                                                ? "Montant libre"
+                                                : formatMontant(ligne.montant_cible)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-[10px] text-gray-500 font-bold mt-1">
+                                    La ligne est obligatoire pour mettre à jour la jauge du membre.
+                                </p>
+                            </div>
+
+                            {formData.membre_id && activeEngagementsForSelectedMember.length > 0 && (
+                                <div>
+                                    <label className="block text-black font-black mb-1">
+                                        Engagement actif du membre
+                                    </label>
+                                    <select
+                                        value={formData.engagement_id}
+                                        onChange={(e) => handleEngagementChange(e.target.value)}
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    >
+                                        <option value="">-- Aucun engagement spécifique --</option>
+                                        {activeEngagementsForSelectedMember.map((e) => (
+                                            <option key={e.engagement_id} value={e.engagement_id}>
+                                                {e.titre} — Reste : {formatMontant(e.reste_a_payer)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-black font-black mb-1">
                                     Type de cotisation *
                                 </label>
                                 <select
-                                    value={formData.type}
+                                    value={formData.type_cotisation}
                                     onChange={(e) => handleTypeChange(e.target.value)}
                                     className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
                                 >
@@ -1218,17 +1920,46 @@ export default function TresorierDashboard() {
                                 />
                             </div>
 
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-black font-black mb-1">
+                                        Mois
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.mois}
+                                        onChange={(e) =>
+                                            setFormData({ ...formData, mois: e.target.value })
+                                        }
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-black font-black mb-1">
+                                        Année
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={formData.annee}
+                                        onChange={(e) =>
+                                            setFormData({ ...formData, annee: e.target.value })
+                                        }
+                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    />
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-black font-black mb-1">
                                     Date
                                 </label>
                                 <input
                                     type="date"
-                                    value={formData.date_cotisation}
+                                    value={formData.date_paiement}
                                     onChange={(e) =>
                                         setFormData({
                                             ...formData,
-                                            date_cotisation: e.target.value,
+                                            date_paiement: e.target.value,
                                         })
                                     }
                                     className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
@@ -1237,19 +1968,19 @@ export default function TresorierDashboard() {
 
                             <div>
                                 <label className="block text-black font-black mb-1">
-                                    Description (optionnelle)
+                                    Notes
                                 </label>
                                 <textarea
-                                    value={formData.description}
+                                    value={formData.notes}
                                     onChange={(e) =>
                                         setFormData({
                                             ...formData,
-                                            description: e.target.value,
+                                            notes: e.target.value,
                                         })
                                     }
                                     className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
                                     rows={2}
-                                    placeholder="Mois de janvier, Événement spécial..."
+                                    placeholder="Ex: Paiement partiel, janvier, événement spécial..."
                                 />
                             </div>
 
@@ -1290,54 +2021,40 @@ export default function TresorierDashboard() {
                         </div>
 
                         <div className="space-y-3">
-                            <div className="border-b border-black/10 pb-2">
-                                <p className="text-xs font-black uppercase text-black/50">
-                                    Date
-                                </p>
-                                <p className="font-black text-black">
-                                    {formatDate(selectedCotisation.date_cotisation)}
-                                </p>
-                            </div>
-
-                            <div className="border-b border-black/10 pb-2">
-                                <p className="text-xs font-black uppercase text-black/50">
-                                    Membre
-                                </p>
-                                <p className="font-black text-black">
-                                    {getMembreNom(selectedCotisation.membre_id)}
-                                </p>
-                            </div>
-
-                            <div className="border-b border-black/10 pb-2">
-                                <p className="text-xs font-black uppercase text-black/50">
-                                    Type
-                                </p>
-                                <p className="font-black text-black">
-                                    {selectedCotisation.type === "sibity"
-                                        ? "📿 Sibity"
-                                        : "📅 Mensualité"}
-                                </p>
-                            </div>
-
-                            <div className="border-b border-black/10 pb-2">
-                                <p className="text-xs font-black uppercase text-black/50">
-                                    Montant
-                                </p>
-                                <p className="font-black text-green-600">
-                                    {formatMontant(selectedCotisation.montant)}
-                                </p>
-                            </div>
-
-                            {selectedCotisation.description && (
-                                <div className="border-b border-black/10 pb-2">
-                                    <p className="text-xs font-black uppercase text-black/50">
-                                        Description
-                                    </p>
-                                    <p className="text-black/70">
-                                        {selectedCotisation.description}
-                                    </p>
-                                </div>
-                            )}
+                            <DetailLine
+                                label="Date"
+                                value={formatDate(getCotisationDate(selectedCotisation))}
+                            />
+                            <DetailLine
+                                label="Membre"
+                                value={
+                                    selectedCotisation.membres?.nom_complet ||
+                                    getMembreNom(selectedCotisation.membre_id)
+                                }
+                            />
+                            <DetailLine
+                                label="Ligne"
+                                value={getLigneTitre(selectedCotisation) || "—"}
+                            />
+                            <DetailLine
+                                label="Type"
+                                value={getTypeLabel(selectedCotisation)}
+                            />
+                            <DetailLine
+                                label="Montant"
+                                value={formatMontant(selectedCotisation.montant)}
+                                green
+                            />
+                            <DetailLine
+                                label="Période"
+                                value={`${selectedCotisation.mois || "—"} ${
+                                    selectedCotisation.annee || ""
+                                }`}
+                            />
+                            <DetailLine
+                                label="Notes"
+                                value={getCotisationNotes(selectedCotisation) || "—"}
+                            />
                         </div>
 
                         <div className="flex gap-3 pt-6">
@@ -1445,6 +2162,68 @@ export default function TresorierDashboard() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function KpiBox({
+    icon,
+    title,
+    value,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    value: string;
+}) {
+    return (
+        <div className="bg-white border-4 border-black rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+                {icon}
+                <p className="text-xs font-black uppercase text-black/50">
+                    {title}
+                </p>
+            </div>
+            <p className="text-xl font-black text-black">{value}</p>
+        </div>
+    );
+}
+
+function TabButton({
+    active,
+    onClick,
+    children,
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={`px-6 py-3 font-black uppercase rounded-t-2xl ${
+                active ? "bg-black text-white" : "bg-gray-100 text-black"
+            }`}
+        >
+            {children}
+        </button>
+    );
+}
+
+function DetailLine({
+    label,
+    value,
+    green = false,
+}: {
+    label: string;
+    value: string;
+    green?: boolean;
+}) {
+    return (
+        <div className="border-b border-black/10 pb-2">
+            <p className="text-xs font-black uppercase text-black/50">{label}</p>
+            <p className={`font-black ${green ? "text-green-600" : "text-black"}`}>
+                {value}
+            </p>
         </div>
     );
 }
