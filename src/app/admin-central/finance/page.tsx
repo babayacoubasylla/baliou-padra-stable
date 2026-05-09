@@ -1,42 +1,58 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+    ArrowLeft,
+    RefreshCw,
+    Plus,
+    CheckCircle,
+    Clock,
+    XCircle,
+    Printer,
+    Download,
+    X,
+} from "lucide-react";
+
+type Tab = "campagnes" | "reversements" | "bilans";
 
 export default function FinancePage() {
+    const router = useRouter();
+
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('budgets');
-    const [generations, setGenerations] = useState<any[]>([]);
-    const [selectedGeneration, setSelectedGeneration] = useState("");
-    const [propositions, setPropositions] = useState<any[]>([]);
-    const [nouvelleProposition, setNouvelleProposition] = useState({
-        generation_nom: "",
-        annee: new Date().getFullYear(),
-        montant_propose: "",
-        description: ""
-    });
-    const [cotisationsExtra, setCotisationsExtra] = useState<any[]>([]);
-    const [nouvelleCotisationExtra, setNouvelleCotisationExtra] = useState({
-        nom: "",
+    const [refreshing, setRefreshing] = useState(false);
+    const [activeTab, setActiveTab] = useState<Tab>("campagnes");
+
+    const [campagnes, setCampagnes] = useState<any[]>([]);
+    const [reversements, setReversements] = useState<any[]>([]);
+    const [bilans, setBilans] = useState<any[]>([]);
+
+    const [showCampagneModal, setShowCampagneModal] = useState(false);
+    const [showReversementModal, setShowReversementModal] = useState(false);
+
+    const currentYear = new Date().getFullYear();
+
+    const [newCampagne, setNewCampagne] = useState({
+        titre: "",
         description: "",
-        montant_requis: "",
-        date_limite: "",
-        attribue_a_toutes: true,
-        generations_concernees: []
-    });
-    const [financeData, setFinanceData] = useState({
-        objectif_actuel: 0,
-        collecte_totale: 0,
-        progression: 0,
-        reste_atteindre: 0,
-        versements_par_type: { sibity: 0, mensualite: 0, extraordinaire: 0 },
-        historique: []
+        type_cotisation: "annuel",
+        mode_montant: "fixe",
+        montant_attendu: "",
+        annee: currentYear.toString(),
+        date_debut: new Date().toISOString().split("T")[0],
+        date_fin: "",
     });
 
-    const router = useRouter();
-    const currentYear = new Date().getFullYear();
+    const [newReversement, setNewReversement] = useState({
+        campagne_id: "",
+        generation_nom: "",
+        montant: "",
+        mode_paiement: "",
+        reference_paiement: "",
+        commentaire: "",
+    });
 
     const generationsList = [
         "Génération Wassalah dramane",
@@ -49,291 +65,326 @@ export default function FinancePage() {
         "Génération makhadja baliou",
         "Génération kissima bah",
         "Génération tchamba",
-        "Diaspora"
+        "Diaspora",
     ];
 
     useEffect(() => {
         checkAuthAndLoadData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const checkAuthAndLoadData = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+
         if (!session) {
-            router.push('/login');
+            router.push("/login");
             return;
         }
 
-        const { data: profile } = await supabase
-            .from('membres')
-            .select('role')
-            .eq('user_id', session.user.id)
+        const { data: profile, error } = await supabase
+            .from("membres")
+            .select("role")
+            .eq("user_id", session.user.id)
             .maybeSingle();
 
-        if (profile?.role !== 'baliou_padra' && profile?.role !== 'super_admin') {
-            router.push('/dashboard');
+        if (error) {
+            alert("Erreur profil : " + error.message);
+            router.push("/dashboard");
             return;
         }
 
-        setGenerations(generationsList);
-        setSelectedGeneration(generationsList[0]);
+        if (profile?.role !== "baliou_padra" && profile?.role !== "super_admin") {
+            router.push("/dashboard");
+            return;
+        }
 
-        await loadPropositions();
-        await loadCotisationsExtra();
-        await loadFinanceData(generationsList[0]);
-
+        await loadData();
         setLoading(false);
     };
 
-    const loadPropositions = async () => {
-        const { data } = await supabase
-            .from('propositions_budgetaires')
-            .select('*')
-            .order('date_proposition', { ascending: false });
+    const cleanValue = (value: any) => (value ?? "").toString().trim();
 
-        setPropositions(data || []);
-    };
-
-    const loadCotisationsExtra = async () => {
-        const { data } = await supabase
-            .from('cotisations_extraordinaires')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        setCotisationsExtra(data || []);
-    };
-
-    const loadFinanceData = async (generationNom: any) => {
-        const { data: budgetValide } = await supabase
-            .from('propositions_budgetaires')
-            .select('montant_propose')
-            .eq('generation_nom', generationNom)
-            .eq('annee', currentYear)
-            .eq('statut_chef', 'accepte')
-            .maybeSingle();
-
-        const objectif = budgetValide?.montant_propose || 0;
-
-        const { data: membresGen } = await supabase
-            .from('membres')
-            .select('id')
-            .eq('generation', generationNom);
-
-        const membreIds = membresGen?.map(m => m.id) || [];
-
-        let collecteTotale = 0;
-        let versementsParType = { sibity: 0, mensualite: 0, extraordinaire: 0 };
-        let cotisationsData = [];
-        let versementsCentrauxData = [];
-
-        if (membreIds.length > 0) {
-            const { data: cotisations } = await supabase
-                .from('cotisations')
-                .select('montant, type, date_cotisation')
-                .in('membre_id', membreIds);
-
-            if (cotisations) {
-                cotisationsData = cotisations;
-                cotisations.forEach(c => {
-                    const type = c.type === 'sibity' ? 'sibity' : 'mensualite';
-                    versementsParType[type] = (versementsParType[type] || 0) + (c.montant || 0);
-                    collecteTotale += c.montant || 0;
-                });
-            }
-        }
-
-        const { data: versementsCentraux } = await supabase
-            .from('versements_centraux')
-            .select('montant, type, date_versement, statut')
-            .eq('generation', generationNom);
-
-        if (versementsCentraux) {
-            versementsCentrauxData = versementsCentraux;
-            versementsCentraux.forEach(v => {
-                if (v.type === 'extraordinaire') {
-                    versementsParType.extraordinaire = (versementsParType.extraordinaire || 0) + (v.montant || 0);
-                    collecteTotale += v.montant || 0;
-                } else if (v.type === 'sibity') {
-                    versementsParType.sibity = (versementsParType.sibity || 0) + (v.montant || 0);
-                    collecteTotale += v.montant || 0;
-                } else if (v.type === 'mensualite') {
-                    versementsParType.mensualite = (versementsParType.mensualite || 0) + (v.montant || 0);
-                    collecteTotale += v.montant || 0;
-                }
-            });
-        }
-
-        const historique = [...cotisationsData, ...versementsCentrauxData].sort((a, b) =>
-            new Date(b.date_cotisation || b.date_versement).getTime() - new Date(a.date_cotisation || a.date_versement).getTime()
-        ).slice(0, 20);
-
-        const progression = objectif > 0 ? (collecteTotale / objectif) * 100 : 0;
-        const resteAtteindre = Math.max(0, objectif - collecteTotale);
-
-        setFinanceData({
-            objectif_actuel: objectif,
-            collecte_totale: collecteTotale,
-            progression: Math.min(100, progression),
-            reste_atteindre: resteAtteindre,
-            versements_par_type: versementsParType,
-            historique
-        });
-    };
-
-    const handleCreateProposition = async (e: any) => {
-        e.preventDefault();
-
-        const { error } = await supabase
-            .from('propositions_budgetaires')
-            .insert([{
-                generation_nom: nouvelleProposition.generation_nom,
-                annee: nouvelleProposition.annee,
-                montant_propose: parseInt(nouvelleProposition.montant_propose),
-                description: nouvelleProposition.description,
-                statut: 'en_attente',
-                statut_chef: 'en_attente'
-            }]);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-            return;
-        }
-
-        alert("Proposition budgétaire créée avec succès !");
-        setNouvelleProposition({
-            generation_nom: "",
-            annee: currentYear,
-            montant_propose: "",
-            description: ""
-        });
-        await loadPropositions();
-    };
-
-    const handleValiderProposition = async (propositionId: any) => {
-        const { error } = await supabase
-            .from('propositions_budgetaires')
-            .update({ statut: 'valide', date_validation: new Date().toISOString() })
-            .eq('id', propositionId);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-            return;
-        }
-
-        alert("Proposition validée !");
-        await loadPropositions();
-
-        if (selectedGeneration) {
-            await loadFinanceData(selectedGeneration);
-        }
-    };
-
-    const handleRejeterProposition = async (propositionId: any) => {
-        const { error } = await supabase
-            .from('propositions_budgetaires')
-            .update({ statut: 'rejete' })
-            .eq('id', propositionId);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-            return;
-        }
-
-        alert("Proposition rejetée");
-        await loadPropositions();
-    };
-
-    const handleAccepterNegociation = async (propositionId: any, nouveauMontant: any) => {
-        const { error } = await supabase
-            .from('propositions_budgetaires')
-            .update({
-                statut_chef: 'accepte',
-                montant_propose: nouveauMontant,
-                date_reponse: new Date().toISOString()
-            })
-            .eq('id', propositionId);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-        } else {
-            alert("Négociation acceptée ! Budget mis à jour.");
-            await loadPropositions();
-            if (selectedGeneration) {
-                await loadFinanceData(selectedGeneration);
-            }
-        }
-    };
-
-    const handleMaintenirProposition = async (propositionId: any) => {
-        const { error } = await supabase
-            .from('propositions_budgetaires')
-            .update({
-                statut_chef: 'rejete',
-                date_reponse: new Date().toISOString()
-            })
-            .eq('id', propositionId);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-        } else {
-            alert("Proposition maintenue.");
-            await loadPropositions();
-        }
-    };
-    const handleCreateCotisationExtra = async (e: any) => {
-        e.preventDefault();
-
-        const { error } = await supabase
-            .from('cotisations_extraordinaires')
-            .insert([{
-                nom: nouvelleCotisationExtra.nom,
-                description: nouvelleCotisationExtra.description,
-                montant_requis: parseInt(nouvelleCotisationExtra.montant_requis),
-                date_limite: nouvelleCotisationExtra.date_limite || null,
-                attribue_a_toutes: nouvelleCotisationExtra.attribue_a_toutes,
-                generations_concernees: nouvelleCotisationExtra.attribue_a_toutes ? [] : nouvelleCotisationExtra.generations_concernees
-            }]);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-            return;
-        }
-
-        alert("Cotisation extraordinaire créée !");
-        setNouvelleCotisationExtra({
-            nom: "",
-            description: "",
-            montant_requis: "",
-            date_limite: "",
-            attribue_a_toutes: true,
-            generations_concernees: []
-        });
-        await loadCotisationsExtra();
-    };
-
-    const handleTerminerCotisation = async (cotisationId: any) => {
-        const { error } = await supabase
-            .from('cotisations_extraordinaires')
-            .update({ statut: 'terminee' })
-            .eq('id', cotisationId);
-
-        if (error) {
-            alert("Erreur: " + error.message);
-            return;
-        }
-
-        alert("Cotisation terminée");
-        await loadCotisationsExtra();
-    };
-
-    const handleGenerationChange = async (e: any) => {
-        const gen = e.target.value;
-        setSelectedGeneration(gen);
-        await loadFinanceData(gen);
+    const numberValue = (value: any) => {
+        const n = Number(value || 0);
+        return Number.isFinite(n) ? n : 0;
     };
 
     const formatMontant = (montant: any) => {
-        if (!montant && montant !== 0) return '0 FCFA';
-        return new Intl.NumberFormat('fr-FR').format(montant) + ' FCFA';
+        return new Intl.NumberFormat("fr-FR").format(numberValue(montant)) + " FCFA";
+    };
+
+    const formatDate = (date?: string | null) => {
+        if (!date) return "—";
+        try {
+            return new Date(date).toLocaleDateString("fr-FR");
+        } catch {
+            return "—";
+        }
+    };
+
+    const loadData = async () => {
+        setRefreshing(true);
+
+        const { data: campagnesData, error: campagnesError } = await supabase
+            .from("cotisation_campagnes")
+            .select("*")
+            .order("created_at", { ascending: false });
+
+        if (campagnesError) {
+            console.error("Erreur campagnes:", campagnesError);
+        }
+
+        setCampagnes(campagnesData || []);
+
+        const { data: reversementsData, error: reversementsError } = await supabase
+            .from("reversements_campagnes")
+            .select("*, cotisation_campagnes(titre, mode_montant, montant_attendu_par_generation)")
+            .order("date_validation", { ascending: false });
+
+        if (reversementsError) {
+            console.error("Erreur reversements:", reversementsError);
+        }
+
+        setReversements(reversementsData || []);
+
+        const { data: bilansData, error: bilansError } = await supabase
+            .from("v_bilan_campagnes")
+            .select("*")
+            .order("annee", { ascending: false });
+
+        if (bilansError) {
+            console.error("Erreur bilans:", bilansError);
+        }
+
+        setBilans(bilansData || []);
+        setRefreshing(false);
+    };
+
+    const resetCampagneForm = () => {
+        setNewCampagne({
+            titre: "",
+            description: "",
+            type_cotisation: "annuel",
+            mode_montant: "fixe",
+            montant_attendu: "",
+            annee: currentYear.toString(),
+            date_debut: new Date().toISOString().split("T")[0],
+            date_fin: "",
+        });
+    };
+
+    const resetReversementForm = () => {
+        setNewReversement({
+            campagne_id: "",
+            generation_nom: "",
+            montant: "",
+            mode_paiement: "",
+            reference_paiement: "",
+            commentaire: "",
+        });
+    };
+
+    const handleCreateCampagne = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!newCampagne.titre.trim()) {
+            alert("Veuillez saisir le titre de la campagne.");
+            return;
+        }
+
+        if (
+            newCampagne.mode_montant === "fixe" &&
+            (!newCampagne.montant_attendu || Number(newCampagne.montant_attendu) <= 0)
+        ) {
+            alert("Veuillez saisir le montant attendu par génération.");
+            return;
+        }
+
+        const { error } = await supabase.rpc("creer_campagne_centrale", {
+            p_titre: newCampagne.titre,
+            p_description: newCampagne.description || null,
+            p_type_cotisation: newCampagne.type_cotisation,
+            p_mode_montant: newCampagne.mode_montant,
+            p_montant_attendu:
+                newCampagne.mode_montant === "fixe"
+                    ? Number(newCampagne.montant_attendu)
+                    : null,
+            p_annee: Number(newCampagne.annee || currentYear),
+            p_date_debut: newCampagne.date_debut || null,
+            p_date_fin: newCampagne.date_fin || null,
+        });
+
+        if (error) {
+            alert("Erreur : " + error.message);
+            return;
+        }
+
+        alert("Campagne centrale créée avec succès !");
+        setShowCampagneModal(false);
+        resetCampagneForm();
+        await loadData();
+    };
+
+    const handleCreateReversement = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!newReversement.campagne_id) {
+            alert("Veuillez sélectionner une campagne.");
+            return;
+        }
+
+        if (!newReversement.generation_nom) {
+            alert("Veuillez sélectionner une génération.");
+            return;
+        }
+
+        if (!newReversement.montant || Number(newReversement.montant) <= 0) {
+            alert("Veuillez saisir un montant valide.");
+            return;
+        }
+
+        const { data, error } = await supabase.rpc("enregistrer_reversement_central", {
+            p_campagne_id: newReversement.campagne_id,
+            p_generation_nom: newReversement.generation_nom,
+            p_montant: Number(newReversement.montant),
+            p_mode_paiement: newReversement.mode_paiement || null,
+            p_reference_paiement: newReversement.reference_paiement || null,
+            p_commentaire: newReversement.commentaire || null,
+        });
+
+        if (error) {
+            alert("Erreur : " + error.message);
+            return;
+        }
+
+        alert(`Reversement enregistré avec succès. Reçu : ${data?.recu_numero || ""}`);
+        setShowReversementModal(false);
+        resetReversementForm();
+        await loadData();
+    };
+
+    const getStatutBadge = (statut?: string | null) => {
+        const value = cleanValue(statut || "active");
+
+        if (value === "active") {
+            return (
+                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-black">
+                    Active
+                </span>
+            );
+        }
+
+        if (value === "cloturee") {
+            return (
+                <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-black">
+                    Clôturée
+                </span>
+            );
+        }
+
+        if (value === "annulee") {
+            return (
+                <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-black">
+                    Annulée
+                </span>
+            );
+        }
+
+        return (
+            <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-black">
+                {value}
+            </span>
+        );
+    };
+
+    const printRecu = (reversement: any) => {
+        const html = `
+            <html>
+                <head>
+                    <title>Reçu reversement</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 40px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .title { font-size: 28px; font-weight: bold; color: #146332; }
+                        .box { border: 3px solid black; padding: 20px; margin-top: 20px; }
+                        .line { margin: 10px 0; }
+                        .label { font-weight: bold; }
+                        .footer { margin-top: 40px; text-align: center; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div class="title">BALIOU PADRA</div>
+                        <div>Reçu de reversement au Bureau Central</div>
+                    </div>
+                    <div class="box">
+                        <h2>REÇU : ${reversement.recu_numero || "—"}</h2>
+                        <div class="line"><span class="label">Campagne :</span> ${reversement.cotisation_campagnes?.titre || "—"}</div>
+                        <div class="line"><span class="label">Génération :</span> ${reversement.generation_nom}</div>
+                        <div class="line"><span class="label">Montant :</span> ${formatMontant(reversement.montant)}</div>
+                        <div class="line"><span class="label">Mode paiement :</span> ${reversement.mode_paiement || "—"}</div>
+                        <div class="line"><span class="label">Référence :</span> ${reversement.reference_paiement || "—"}</div>
+                        <div class="line"><span class="label">Date validation :</span> ${formatDate(reversement.date_validation)}</div>
+                        <div class="line"><span class="label">Commentaire :</span> ${reversement.commentaire || "—"}</div>
+                    </div>
+                    <div class="footer">
+                        Document généré par la plateforme Baliou Padra
+                    </div>
+                </body>
+            </html>
+        `;
+
+        const win = window.open();
+
+        if (!win) {
+            alert("Impossible d’ouvrir la fenêtre d’impression.");
+            return;
+        }
+
+        win.document.write(html);
+        win.document.close();
+        win.print();
+    };
+
+    const exportReversements = () => {
+        const rows = reversements.map((r) => ({
+            Date: formatDate(r.date_validation),
+            Campagne: r.cotisation_campagnes?.titre || "",
+            Generation: r.generation_nom,
+            Montant: r.montant,
+            Mode: r.mode_paiement || "",
+            Reference: r.reference_paiement || "",
+            Recu: r.recu_numero || "",
+            Commentaire: r.commentaire || "",
+        }));
+
+        if (rows.length === 0) return;
+
+        const headers = Object.keys(rows[0]);
+
+        const csv =
+            "\uFEFF" +
+            headers.join(";") +
+            "\n" +
+            rows
+                .map((row: any) =>
+                    headers
+                        .map((h) => `"${(row[h] ?? "").toString().replace(/"/g, '""')}"`)
+                        .join(";")
+                )
+                .join("\n");
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = url;
+        a.download = `reversements_campagnes_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+
+        URL.revokeObjectURL(url);
     };
 
     if (loading) {
@@ -345,226 +396,641 @@ export default function FinancePage() {
     }
 
     return (
-        <div className="min-h-screen bg-white p-6">
+        <main className="min-h-screen bg-white p-6 text-black">
             <div className="max-w-7xl mx-auto">
-                <div className="mb-6">
-                    <Link href="/admin-central" className="inline-flex items-center gap-2 text-black font-black hover:text-[#146332] transition-colors mb-4">
-                        <span>←</span> Retour au tableau de bord
+                <header className="mb-6">
+                    <Link
+                        href="/admin-central"
+                        className="inline-flex items-center gap-2 text-black font-black hover:text-[#146332] transition-colors mb-4"
+                    >
+                        <ArrowLeft size={20} /> Retour au tableau de bord
                     </Link>
-                    <h1 className="text-4xl font-black text-[#146332] uppercase italic">GESTION FINANCIÈRE</h1>
-                    <div className="h-1 w-32 bg-black mt-2"></div>
-                    <p className="text-black/60 mt-2">Budgets, cotisations et suivi des générations</p>
-                </div>
+
+                    <div className="flex justify-between items-start flex-wrap gap-4">
+                        <div>
+                            <h1 className="text-4xl font-black text-[#146332] uppercase italic">
+                                GESTION FINANCIÈRE CENTRALE
+                            </h1>
+                            <div className="h-1 w-32 bg-black mt-2"></div>
+                            <p className="text-black/60 mt-2">
+                                Campagnes centrales, reversements des générations et bilans
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                onClick={() => setShowCampagneModal(true)}
+                                className="bg-[#146332] text-white px-4 py-2 rounded-xl font-black text-sm hover:bg-black transition-all flex items-center gap-2"
+                            >
+                                <Plus size={16} /> Nouvelle campagne
+                            </button>
+
+                            <button
+                                onClick={() => setShowReversementModal(true)}
+                                className="bg-black text-white px-4 py-2 rounded-xl font-black text-sm hover:bg-[#146332] transition-all flex items-center gap-2"
+                            >
+                                <CheckCircle size={16} /> Enregistrer reversement
+                            </button>
+
+                            <button
+                                onClick={loadData}
+                                disabled={refreshing}
+                                className="bg-gray-200 text-black px-4 py-2 rounded-xl font-black text-sm hover:bg-gray-300 transition-all flex items-center gap-2"
+                            >
+                                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+                                Actualiser
+                            </button>
+                        </div>
+                    </div>
+                </header>
 
                 <div className="flex flex-wrap gap-2 border-b-4 border-black mb-6">
-                    <button onClick={() => setActiveTab('budgets')} className={`px-6 py-3 font-black uppercase text-sm transition-all ${activeTab === 'budgets' ? 'bg-black text-white rounded-t-2xl' : 'text-black'}`}>📋 Propositions budgétaires</button>
-                    <button onClick={() => setActiveTab('suivicotisations')} className={`px-6 py-3 font-black uppercase text-sm transition-all ${activeTab === 'suivicotisations' ? 'bg-black text-white rounded-t-2xl' : 'text-black'}`}>📊 Suivi des cotisations</button>
-                    <button onClick={() => setActiveTab('extraordinaire')} className={`px-6 py-3 font-black uppercase text-sm transition-all ${activeTab === 'extraordinaire' ? 'bg-black text-white rounded-t-2xl' : 'text-black'}`}>⚡ Cotisations extraordinaires</button>
+                    <button
+                        onClick={() => setActiveTab("campagnes")}
+                        className={`px-6 py-3 font-black uppercase text-sm transition-all ${activeTab === "campagnes"
+                                ? "bg-black text-white rounded-t-2xl"
+                                : "text-black"
+                            }`}
+                    >
+                        📋 Campagnes centrales
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab("reversements")}
+                        className={`px-6 py-3 font-black uppercase text-sm transition-all ${activeTab === "reversements"
+                                ? "bg-black text-white rounded-t-2xl"
+                                : "text-black"
+                            }`}
+                    >
+                        💰 Reversements
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab("bilans")}
+                        className={`px-6 py-3 font-black uppercase text-sm transition-all ${activeTab === "bilans"
+                                ? "bg-black text-white rounded-t-2xl"
+                                : "text-black"
+                            }`}
+                    >
+                        📊 Bilans
+                    </button>
                 </div>
 
-                {activeTab === 'budgets' && (
-                    <div className="space-y-8">
-                        {/* Formulaire nouvelle proposition */}
-                        <div className="bg-white border-4 border-black rounded-2xl p-6">
-                            <h2 className="text-xl font-black text-black mb-4">📝 Nouvelle proposition budgétaire</h2>
-                            <form onSubmit={handleCreateProposition} className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-black font-black mb-1">Génération</label>
-                                        <select value={nouvelleProposition.generation_nom} onChange={(e) => setNouvelleProposition({ ...nouvelleProposition, generation_nom: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" required>
-                                            <option value="">Sélectionner</option>
-                                            {generationsList.map(gen => <option key={gen} value={gen}>{gen}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-black font-black mb-1">Année</label>
-                                        <input type="number" value={nouvelleProposition.annee} onChange={(e) => setNouvelleProposition({ ...nouvelleProposition, annee: parseInt(e.target.value) })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" required />
-                                    </div>
-                                    <div>
-                                        <label className="block text-black font-black mb-1">Montant proposé (FCFA)</label>
-                                        <input type="number" value={nouvelleProposition.montant_propose} onChange={(e) => setNouvelleProposition({ ...nouvelleProposition, montant_propose: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" required />
-                                    </div>
-                                    <div>
-                                        <label className="block text-black font-black mb-1">Description</label>
-                                        <input type="text" value={nouvelleProposition.description} onChange={(e) => setNouvelleProposition({ ...nouvelleProposition, description: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" placeholder="Budget annuel..." />
-                                    </div>
-                                </div>
-                                <button type="submit" className="bg-black text-white px-6 py-3 rounded-xl font-black uppercase text-sm hover:bg-[#146332] transition-all">+ Créer la proposition</button>
-                            </form>
+                {activeTab === "campagnes" && (
+                    <section className="bg-white border-4 border-black rounded-2xl overflow-hidden">
+                        <div className="bg-black p-4">
+                            <h2 className="text-white font-black uppercase text-sm">
+                                Campagnes centrales
+                            </h2>
                         </div>
 
-                        {/* Tableau des propositions */}
-                        <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
-                            <div className="bg-black p-4"><h2 className="text-white font-black uppercase text-sm">📋 Propositions existantes</h2></div>
-                            {propositions.length === 0 ? (
-                                <div className="p-12 text-center text-black/60 italic">Aucune proposition budgétaire</div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead className="bg-gray-100">
-                                            <tr><th className="p-3 text-left font-black">Génération</th><th className="p-3 text-left font-black">Année</th><th className="p-3 text-left font-black">Montant</th><th className="p-3 text-left font-black">Statut BC</th><th className="p-3 text-left font-black">Statut Chef</th><th className="p-3 text-center font-black">Actions</th></tr>
-                                        </thead>
-                                        <tbody>
-                                            {propositions.map((prop) => (
-                                                <tr key={prop.id} className="border-b border-black/10">
-                                                    <td className="p-3 font-black text-black">{prop.generation_nom}</td>
-                                                    <td className="p-3">{prop.annee}</td>
-                                                    <td className="p-3 font-black text-green-600">{formatMontant(prop.montant_propose)}</td>
-                                                    <td className="p-3">
-                                                        {prop.statut === 'valide' && <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-black">✅ Validé BC</span>}
-                                                        {prop.statut === 'en_attente' && <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-black">⏳ En attente BC</span>}
-                                                        {prop.statut === 'rejete' && <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-black">❌ Rejeté BC</span>}
-                                                    </td>
-                                                    <td className="p-3">
-                                                        {prop.statut_chef === 'accepte' && <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-black">✅ Accepté Chef</span>}
-                                                        {(!prop.statut_chef || prop.statut_chef === 'en_attente') && <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-black">⏳ En attente Chef</span>}
-                                                        {prop.statut_chef === 'rejete' && <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-black">❌ Rejeté Chef</span>}
-                                                        {prop.statut_chef === 'negociation' && <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-black">🔄 Négociation</span>}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        {prop.statut === 'en_attente' && (
-                                                            <div className="flex gap-2 justify-center">
-                                                                <button onClick={() => handleValiderProposition(prop.id)} className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-black">Valider BC</button>
-                                                                <button onClick={() => handleRejeterProposition(prop.id)} className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs font-black">Rejeter BC</button>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
+                        {campagnes.length === 0 ? (
+                            <div className="p-12 text-center text-black/60 italic">
+                                Aucune campagne centrale créée.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th className="p-3 text-left font-black">Titre</th>
+                                            <th className="p-3 text-left font-black">Type</th>
+                                            <th className="p-3 text-left font-black">Mode</th>
+                                            <th className="p-3 text-right font-black">Montant attendu</th>
+                                            <th className="p-3 text-left font-black">Période</th>
+                                            <th className="p-3 text-center font-black">Statut</th>
+                                        </tr>
+                                    </thead>
 
-                        {/* SECTION: RÉPONSES DES CHEFS */}
-                        {propositions.filter(p => p.statut_chef !== 'en_attente' && p.statut_chef !== undefined).length > 0 && (
-                            <div className="bg-white border-4 border-black rounded-2xl p-6">
-                                <h2 className="text-xl font-black text-black mb-4">📋 Réponses des Chefs de Génération</h2>
-                                <div className="space-y-4">
-                                    {propositions.filter(p => p.statut_chef !== 'en_attente' && p.statut_chef !== undefined).map((prop) => {
-                                        const isAccepte = prop.statut_chef === 'accepte';
-                                        const isRejete = prop.statut_chef === 'rejete';
-                                        const isNegociation = prop.statut_chef === 'negociation';
-                                        return (
-                                            <div key={prop.id} className={`border-2 rounded-xl p-4 ${isAccepte ? 'border-green-500 bg-green-50' : isRejete ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50'}`}>
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <p className="font-black text-black text-lg">{prop.generation_nom}</p>
-                                                        <p className="text-sm text-black/60">Proposition du {new Date(prop.date_proposition).toLocaleDateString()}</p>
-                                                        <p className="text-sm text-black/60">Montant initial: <span className="font-black">{formatMontant(prop.montant_propose)}</span></p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-black ${isAccepte ? 'bg-green-500 text-white' : isRejete ? 'bg-red-500 text-white' : 'bg-orange-500 text-white'}`}>
-                                                            {isAccepte ? '✅ Accepté' : isRejete ? '❌ Rejeté' : '🔄 Négociation'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                {isNegociation && prop.montant_corrige && (
-                                                    <div className="mt-3 p-3 bg-orange-100 rounded-lg">
-                                                        <p className="text-sm font-black text-orange-800">Proposition du Chef :</p>
-                                                        <p className="font-black text-orange-800">{formatMontant(prop.montant_corrige)}</p>
-                                                        {prop.commentaire_chef && <p className="text-sm text-orange-700 mt-1">Commentaire : {prop.commentaire_chef}</p>}
-                                                        <div className="flex gap-3 mt-3">
-                                                            <button onClick={() => handleAccepterNegociation(prop.id, prop.montant_corrige)} className="bg-green-600 text-white px-4 py-2 rounded-xl font-black text-sm">Accepter la négociation</button>
-                                                            <button onClick={() => handleMaintenirProposition(prop.id)} className="bg-red-600 text-white px-4 py-2 rounded-xl font-black text-sm">Maintenir proposition</button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {isRejete && prop.commentaire_chef && (
-                                                    <div className="mt-3 p-3 bg-red-100 rounded-lg">
-                                                        <p className="text-sm font-black text-red-800">Motif du rejet :</p>
-                                                        <p className="text-sm text-red-700">{prop.commentaire_chef}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                    <tbody>
+                                        {campagnes.map((c) => (
+                                            <tr key={c.id} className="border-b border-black/10">
+                                                <td className="p-3 font-black">
+                                                    {c.titre}
+                                                    <p className="text-xs text-black/50">
+                                                        {c.description || "—"}
+                                                    </p>
+                                                </td>
+                                                <td className="p-3">{c.type_cotisation}</td>
+                                                <td className="p-3">{c.mode_montant}</td>
+                                                <td className="p-3 text-right font-black text-green-700">
+                                                    {c.mode_montant === "fixe"
+                                                        ? formatMontant(c.montant_attendu_par_generation)
+                                                        : "Libre"}
+                                                </td>
+                                                <td className="p-3 text-sm">
+                                                    {formatDate(c.date_debut)} → {formatDate(c.date_fin)}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {getStatutBadge(c.statut)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         )}
-                    </div>
+                    </section>
                 )}
 
-                {activeTab === 'suivicotisations' && (
-                    <div className="space-y-8">
-                        <div className="bg-white border-4 border-black rounded-2xl p-6">
-                            <label className="block text-black font-black mb-2">Sélectionner une génération</label>
-                            <select value={selectedGeneration} onChange={handleGenerationChange} className="w-full md:w-96 p-4 border-4 border-black rounded-2xl font-black text-black bg-white">
-                                {generations.map((gen) => <option key={gen} value={gen}>{gen}</option>)}
-                            </select>
+                {activeTab === "reversements" && (
+                    <section className="bg-white border-4 border-black rounded-2xl overflow-hidden">
+                        <div className="bg-black p-4 flex justify-between items-center">
+                            <h2 className="text-white font-black uppercase text-sm">
+                                Reversements des générations
+                            </h2>
+
+                            <button
+                                onClick={exportReversements}
+                                className="bg-white text-black px-4 py-2 rounded-xl font-black text-xs flex items-center gap-2"
+                            >
+                                <Download size={14} /> Exporter
+                            </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div className="bg-white border-4 border-black rounded-2xl p-5"><p className="text-xs font-black uppercase text-black/50">Objectif budgétaire</p><p className="text-2xl font-black text-black">{formatMontant(financeData.objectif_actuel)}</p></div>
-                            <div className="bg-white border-4 border-black rounded-2xl p-5"><p className="text-xs font-black uppercase text-black/50">Collecte totale</p><p className="text-2xl font-black text-green-600">{formatMontant(financeData.collecte_totale)}</p></div>
-                            <div className="bg-white border-4 border-black rounded-2xl p-5"><p className="text-xs font-black uppercase text-black/50">Progression</p><p className="text-2xl font-black text-blue-600">{financeData.progression.toFixed(1)}%</p></div>
-                            <div className="bg-white border-4 border-black rounded-2xl p-5"><p className="text-xs font-black uppercase text-black/50">Reste à atteindre</p><p className="text-2xl font-black text-orange-600">{formatMontant(financeData.reste_atteindre)}</p></div>
-                        </div>
-                        <div className="bg-white border-4 border-black rounded-2xl p-6">
-                            <div className="flex justify-between mb-2"><span className="font-black text-black">Progression</span><span className="font-black text-black">{financeData.progression.toFixed(1)}%</span></div>
-                            <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden border-2 border-black"><div className="h-full bg-green-500" style={{ width: `${financeData.progression}%` }}></div></div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-white border-4 border-black rounded-2xl p-5 text-center"><span className="text-3xl">📿</span><p className="font-black text-black mt-2">Sibity</p><p className="text-xl font-black text-green-600">{formatMontant(financeData.versements_par_type.sibity)}</p></div>
-                            <div className="bg-white border-4 border-black rounded-2xl p-5 text-center"><span className="text-3xl">📅</span><p className="font-black text-black mt-2">Mensualités</p><p className="text-xl font-black text-green-600">{formatMontant(financeData.versements_par_type.mensualite)}</p></div>
-                            <div className="bg-white border-4 border-black rounded-2xl p-5 text-center"><span className="text-3xl">⚡</span><p className="font-black text-black mt-2">Extraordinaire</p><p className="text-xl font-black text-green-600">{formatMontant(financeData.versements_par_type.extraordinaire)}</p></div>
-                        </div>
-                        <div className="bg-white border-4 border-black rounded-2xl p-6">
-                            <h3 className="font-black text-black mb-4">📜 Historique récent des versements</h3>
-                            {financeData.historique.length === 0 ? <p className="text-black/60 italic">Aucun versement enregistré</p> : (
-                                <div className="space-y-2 max-h-64 overflow-y-auto">
-                                    {financeData.historique.map((v, idx) => (
-                                        <div key={idx} className="flex justify-between border-b border-black/10 py-2">
-                                            <span className="text-sm text-black/60">{new Date(v.date_cotisation || v.date_versement).toLocaleDateString()}</span>
-                                            <span className="font-black text-black">{v.type || 'versement'}</span>
-                                            <span className="font-black text-green-600">{formatMontant(v.montant || 0)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+
+                        {reversements.length === 0 ? (
+                            <div className="p-12 text-center text-black/60 italic">
+                                Aucun reversement enregistré.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th className="p-3 text-left font-black">Date</th>
+                                            <th className="p-3 text-left font-black">Campagne</th>
+                                            <th className="p-3 text-left font-black">Génération</th>
+                                            <th className="p-3 text-right font-black">Montant</th>
+                                            <th className="p-3 text-left font-black">Mode</th>
+                                            <th className="p-3 text-left font-black">Reçu</th>
+                                            <th className="p-3 text-center font-black">Action</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {reversements.map((r) => (
+                                            <tr key={r.id} className="border-b border-black/10">
+                                                <td className="p-3">{formatDate(r.date_validation)}</td>
+                                                <td className="p-3 font-black">
+                                                    {r.cotisation_campagnes?.titre || "—"}
+                                                </td>
+                                                <td className="p-3">{r.generation_nom}</td>
+                                                <td className="p-3 text-right font-black text-green-700">
+                                                    {formatMontant(r.montant)}
+                                                </td>
+                                                <td className="p-3">{r.mode_paiement || "—"}</td>
+                                                <td className="p-3 font-black text-blue-700">
+                                                    {r.recu_numero || "—"}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <button
+                                                        onClick={() => printRecu(r)}
+                                                        className="text-blue-600 font-black"
+                                                    >
+                                                        <Printer size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </section>
                 )}
 
-                {activeTab === 'extraordinaire' && (
-                    <div className="space-y-8">
-                        <div className="bg-white border-4 border-black rounded-2xl p-6">
-                            <h2 className="text-xl font-black text-black mb-4">⚡ Nouvelle cotisation extraordinaire</h2>
-                            <form onSubmit={handleCreateCotisationExtra} className="space-y-4">
+                {activeTab === "bilans" && (
+                    <section className="bg-white border-4 border-black rounded-2xl overflow-hidden">
+                        <div className="bg-black p-4">
+                            <h2 className="text-white font-black uppercase text-sm">
+                                Bilans automatiques par campagne
+                            </h2>
+                        </div>
+
+                        {bilans.length === 0 ? (
+                            <div className="p-12 text-center text-black/60 italic">
+                                Aucun bilan disponible.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th className="p-3 text-left font-black">Campagne</th>
+                                            <th className="p-3 text-left font-black">Année</th>
+                                            <th className="p-3 text-right font-black">Entrées</th>
+                                            <th className="p-3 text-right font-black">Dépenses</th>
+                                            <th className="p-3 text-right font-black">Solde</th>
+                                            <th className="p-3 text-center font-black">Statut</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {bilans.map((b) => (
+                                            <tr key={b.campagne_id} className="border-b border-black/10">
+                                                <td className="p-3 font-black">
+                                                    {b.titre}
+                                                    <p className="text-xs text-black/50">
+                                                        {b.description || "—"}
+                                                    </p>
+                                                </td>
+                                                <td className="p-3">{b.annee}</td>
+                                                <td className="p-3 text-right font-black text-green-700">
+                                                    {formatMontant(b.total_entrees)}
+                                                </td>
+                                                <td className="p-3 text-right font-black text-red-700">
+                                                    {formatMontant(b.total_depenses)}
+                                                </td>
+                                                <td className="p-3 text-right font-black text-blue-700">
+                                                    {formatMontant(b.solde)}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {getStatutBadge(b.statut)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </section>
+                )}
+
+                {/* Modal création campagne */}
+                {showCampagneModal && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white border-4 border-black rounded-2xl max-w-xl w-full p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black">
+                                    Nouvelle campagne centrale
+                                </h2>
+                                <button onClick={() => setShowCampagneModal(false)}>
+                                    <X size={26} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleCreateCampagne} className="space-y-4">
+                                <Input
+                                    label="Titre"
+                                    value={newCampagne.titre}
+                                    onChange={(v) => setNewCampagne({ ...newCampagne, titre: v })}
+                                    required
+                                />
+
+                                <Textarea
+                                    label="Description"
+                                    value={newCampagne.description}
+                                    onChange={(v) =>
+                                        setNewCampagne({ ...newCampagne, description: v })
+                                    }
+                                />
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label className="block text-black font-black mb-1">Nom</label><input type="text" value={nouvelleCotisationExtra.nom} onChange={(e) => setNouvelleCotisationExtra({ ...nouvelleCotisationExtra, nom: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" placeholder="Ex: Projet Mosquée..." required /></div>
-                                    <div><label className="block text-black font-black mb-1">Montant requis</label><input type="number" value={nouvelleCotisationExtra.montant_requis} onChange={(e) => setNouvelleCotisationExtra({ ...nouvelleCotisationExtra, montant_requis: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" required /></div>
-                                    <div className="md:col-span-2"><label className="block text-black font-black mb-1">Description</label><textarea value={nouvelleCotisationExtra.description} onChange={(e) => setNouvelleCotisationExtra({ ...nouvelleCotisationExtra, description: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" rows={2} placeholder="Objectif..." /></div>
-                                    <div><label className="block text-black font-black mb-1">Date limite</label><input type="date" value={nouvelleCotisationExtra.date_limite} onChange={(e) => setNouvelleCotisationExtra({ ...nouvelleCotisationExtra, date_limite: e.target.value })} className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white" /></div>
-                                    <div className="md:col-span-2"><label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={nouvelleCotisationExtra.attribue_a_toutes} onChange={(e) => setNouvelleCotisationExtra({ ...nouvelleCotisationExtra, attribue_a_toutes: e.target.checked })} className="w-5 h-5" /><span className="font-black text-black">Attribuer à toutes les générations</span></label></div>
+                                    <Select
+                                        label="Type"
+                                        value={newCampagne.type_cotisation}
+                                        onChange={(v) =>
+                                            setNewCampagne({
+                                                ...newCampagne,
+                                                type_cotisation: v,
+                                            })
+                                        }
+                                        options={[
+                                            { value: "annuel", label: "Annuel" },
+                                            { value: "extraordinaire", label: "Extraordinaire" },
+                                            { value: "libre", label: "Libre" },
+                                            { value: "projet", label: "Projet" },
+                                            { value: "autre", label: "Autre" },
+                                        ]}
+                                    />
+
+                                    <Select
+                                        label="Mode montant"
+                                        value={newCampagne.mode_montant}
+                                        onChange={(v) =>
+                                            setNewCampagne({
+                                                ...newCampagne,
+                                                mode_montant: v,
+                                                montant_attendu:
+                                                    v === "libre" ? "" : newCampagne.montant_attendu,
+                                            })
+                                        }
+                                        options={[
+                                            { value: "fixe", label: "Montant fixe" },
+                                            { value: "libre", label: "Montant libre" },
+                                        ]}
+                                    />
                                 </div>
-                                <button type="submit" className="bg-black text-white px-6 py-3 rounded-xl font-black uppercase text-sm hover:bg-[#146332] transition-all">+ Créer la cotisation</button>
+
+                                {newCampagne.mode_montant === "fixe" && (
+                                    <Input
+                                        label="Montant attendu par génération"
+                                        type="number"
+                                        value={newCampagne.montant_attendu}
+                                        onChange={(v) =>
+                                            setNewCampagne({
+                                                ...newCampagne,
+                                                montant_attendu: v,
+                                            })
+                                        }
+                                        required
+                                    />
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <Input
+                                        label="Année"
+                                        type="number"
+                                        value={newCampagne.annee}
+                                        onChange={(v) =>
+                                            setNewCampagne({ ...newCampagne, annee: v })
+                                        }
+                                    />
+
+                                    <Input
+                                        label="Date début"
+                                        type="date"
+                                        value={newCampagne.date_debut}
+                                        onChange={(v) =>
+                                            setNewCampagne({
+                                                ...newCampagne,
+                                                date_debut: v,
+                                            })
+                                        }
+                                    />
+
+                                    <Input
+                                        label="Date fin"
+                                        type="date"
+                                        value={newCampagne.date_fin}
+                                        onChange={(v) =>
+                                            setNewCampagne({ ...newCampagne, date_fin: v })
+                                        }
+                                    />
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCampagneModal(false)}
+                                        className="flex-1 bg-gray-200 py-3 rounded-xl font-black"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-black text-white py-3 rounded-xl font-black"
+                                    >
+                                        Créer
+                                    </button>
+                                </div>
                             </form>
                         </div>
-                        <div className="bg-white border-4 border-black rounded-2xl overflow-hidden">
-                            <div className="bg-black p-4"><h2 className="text-white font-black uppercase text-sm">⚡ Cotisations extraordinaires actives</h2></div>
-                            {cotisationsExtra.length === 0 ? <div className="p-12 text-center text-black/60 italic">Aucune cotisation extraordinaire</div> : (
-                                <div className="divide-y-2 divide-black/10">
-                                    {cotisationsExtra.map((cot) => (
-                                        <div key={cot.id} className="p-5">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div><h3 className="font-black text-xl text-black">{cot.nom}</h3><p className="text-black/60 text-sm">{cot.description}</p></div>
-                                                {cot.statut === 'active' && <button onClick={() => handleTerminerCotisation(cot.id)} className="bg-orange-500 text-white px-4 py-2 rounded-xl font-black text-xs">Terminer</button>}
-                                                {cot.statut === 'terminee' && <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-black">Terminée ✅</span>}
-                                            </div>
-                                            <div className="flex gap-6 text-sm">
-                                                <span className="font-black text-black">💰 {cot.montant_requis.toLocaleString()} FCFA</span>
-                                                {cot.date_limite && <span className="text-black/60">📅 Limite: {new Date(cot.date_limite).toLocaleDateString()}</span>}
-                                                <span className="text-black/60">{cot.attribue_a_toutes ? '🌍 Toutes les générations' : `📌 ${cot.generations_concernees?.length || 0} génération(s)`}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                    </div>
+                )}
+
+                {/* Modal reversement */}
+                {showReversementModal && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white border-4 border-black rounded-2xl max-w-xl w-full p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black">
+                                    Enregistrer un reversement reçu
+                                </h2>
+                                <button onClick={() => setShowReversementModal(false)}>
+                                    <X size={26} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleCreateReversement} className="space-y-4">
+                                <Select
+                                    label="Campagne"
+                                    value={newReversement.campagne_id}
+                                    onChange={(v) =>
+                                        setNewReversement({
+                                            ...newReversement,
+                                            campagne_id: v,
+                                        })
+                                    }
+                                    options={[
+                                        { value: "", label: "Sélectionner" },
+                                        ...campagnes
+                                            .filter((c) => c.statut === "active")
+                                            .map((c) => ({
+                                                value: c.id,
+                                                label: `${c.titre} — ${c.annee}`,
+                                            })),
+                                    ]}
+                                />
+
+                                <Select
+                                    label="Génération"
+                                    value={newReversement.generation_nom}
+                                    onChange={(v) =>
+                                        setNewReversement({
+                                            ...newReversement,
+                                            generation_nom: v,
+                                        })
+                                    }
+                                    options={[
+                                        { value: "", label: "Sélectionner" },
+                                        ...generationsList.map((g) => ({
+                                            value: g,
+                                            label: g,
+                                        })),
+                                    ]}
+                                />
+
+                                <Input
+                                    label="Montant reçu"
+                                    type="number"
+                                    value={newReversement.montant}
+                                    onChange={(v) =>
+                                        setNewReversement({
+                                            ...newReversement,
+                                            montant: v,
+                                        })
+                                    }
+                                    required
+                                />
+
+                                <Input
+                                    label="Mode de paiement"
+                                    value={newReversement.mode_paiement}
+                                    onChange={(v) =>
+                                        setNewReversement({
+                                            ...newReversement,
+                                            mode_paiement: v,
+                                        })
+                                    }
+                                />
+
+                                <Input
+                                    label="Référence paiement"
+                                    value={newReversement.reference_paiement}
+                                    onChange={(v) =>
+                                        setNewReversement({
+                                            ...newReversement,
+                                            reference_paiement: v,
+                                        })
+                                    }
+                                />
+
+                                <Textarea
+                                    label="Commentaire"
+                                    value={newReversement.commentaire}
+                                    onChange={(v) =>
+                                        setNewReversement({
+                                            ...newReversement,
+                                            commentaire: v,
+                                        })
+                                    }
+                                />
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowReversementModal(false)}
+                                        className="flex-1 bg-gray-200 py-3 rounded-xl font-black"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-black text-white py-3 rounded-xl font-black"
+                                    >
+                                        Enregistrer
+                                    </button>
                                 </div>
-                            )}
+                            </form>
                         </div>
                     </div>
                 )}
+
+                <div className="mt-6 text-right">
+                    <p className="text-xs text-gray-400 font-black uppercase">
+                        Bureau Central Baliou Padra — Gestion financière centrale
+                    </p>
+                </div>
             </div>
-        </div>
+        </main>
+    );
+}
+
+function Input({
+    label,
+    value,
+    onChange,
+    type = "text",
+    required = false,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    type?: string;
+    required?: boolean;
+}) {
+    return (
+        <label className="block">
+            <span className="block text-xs font-black uppercase text-gray-600 mb-1">
+                {label}
+            </span>
+            <input
+                type={type}
+                value={value}
+                required={required}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white"
+            />
+        </label>
+    );
+}
+
+function Textarea({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    return (
+        <label className="block">
+            <span className="block text-xs font-black uppercase text-gray-600 mb-1">
+                {label}
+            </span>
+            <textarea
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                rows={3}
+                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white"
+            />
+        </label>
+    );
+}
+
+function Select({
+    label,
+    value,
+    onChange,
+    options,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    options: Array<{ value: string; label: string }>;
+}) {
+    return (
+        <label className="block">
+            <span className="block text-xs font-black uppercase text-gray-600 mb-1">
+                {label}
+            </span>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white"
+            >
+                {options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                        {o.label}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
+}
+
+function getStatutBadge(statut?: string | null) {
+    const value = (statut || "active").toString();
+
+    if (value === "active") {
+        return (
+            <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-black">
+                Active
+            </span>
+        );
+    }
+
+    if (value === "cloturee") {
+        return (
+            <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-black">
+                Clôturée
+            </span>
+        );
+    }
+
+    if (value === "annulee") {
+        return (
+            <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-black">
+                Annulée
+            </span>
+        );
+    }
+
+    return (
+        <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-black">
+            {value}
+        </span>
     );
 }

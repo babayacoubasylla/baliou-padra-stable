@@ -113,7 +113,6 @@ export default function TresorierDashboard() {
 
     const formatDate = (date?: string | null): string => {
         if (!date) return "—";
-
         try {
             return new Date(date).toLocaleDateString("fr-FR");
         } catch {
@@ -123,7 +122,6 @@ export default function TresorierDashboard() {
 
     const getMoisLabel = (date?: string | null): string => {
         if (!date) return "";
-
         try {
             return new Date(date).toLocaleString("fr-FR", {
                 month: "long",
@@ -154,25 +152,22 @@ export default function TresorierDashboard() {
     const getLigneTitre = (cotisation: any): string => {
         return cleanValue(
             cotisation?.cotisation_lignes?.titre ||
-                cotisation?.ligne_titre ||
-                ""
+            cotisation?.ligne_titre ||
+            ""
         );
     };
 
     const getTypeLabel = (cotisation: any): string => {
         const type = getCotisationType(cotisation);
-
         if (type.includes("sibity") || type.includes("sibiti")) return "📿 Sibiti";
         if (type.includes("mensualite") || type.includes("mensualité")) return "📅 Mensualité";
         if (type.includes("engagement")) return "🤝 Engagement";
         if (type.includes("extraordinaire")) return "⚡ Autre cotisation";
-
         return type ? `💰 ${type}` : "💰 Cotisation";
     };
 
     const getLigneTypeLabel = (ligne: any) => {
         const type = cleanValue(ligne?.type_ligne);
-
         if (type === "sibiti") return "🌍 Sibiti global";
         if (type === "engagement") return "🤝 Engagement libre";
         return "💰 Cotisation";
@@ -334,12 +329,9 @@ export default function TresorierDashboard() {
         (paiementsData || []).forEach((p) => {
             const engagementId = String(p.engagement_id || "");
             if (!engagementId) return;
-
             const statut = cleanValue(p.statut || "valide");
             if (statut !== "valide") return;
-
             const montantActuel = paiementsParEngagement.get(engagementId) || 0;
-
             paiementsParEngagement.set(
                 engagementId,
                 montantActuel + Number(p.montant || 0)
@@ -481,15 +473,12 @@ export default function TresorierDashboard() {
 
     const refreshAll = async () => {
         if (!user?.generation) return;
-
         setRefreshing(true);
-
         await loadMembres(user.generation);
         await loadLignesCotisation(user.generation);
         await loadEngagements(user.generation);
         await loadCotisations(user.generation);
         await loadPropositionsBudget(user.generation);
-
         setRefreshing(false);
     };
 
@@ -547,21 +536,53 @@ export default function TresorierDashboard() {
         });
     };
 
+    // =====================================================
+    // FIX: Engagements actifs pour le membre sélectionné
+    // Ne filtre plus par ligne_cotisation_id de façon stricte
+    // Montre TOUS les engagements actifs du membre
+    // =====================================================
     const activeEngagementsForSelectedMember = engagements.filter((e) => {
         if (!formData.membre_id) return false;
 
         const sameMember = Number(e.membre_id) === Number(formData.membre_id);
         const isActive = cleanValue(e.statut) === "actif";
 
-        if (!formData.ligne_cotisation_id) {
-            return sameMember && isActive;
-        }
+        return sameMember && isActive;
+    });
 
+    // =====================================================
+    // FIX: Engagements actifs filtrés par la ligne sélectionnée
+    // Utilisé pour afficher le dropdown contextuel
+    // =====================================================
+    const activeEngagementsForSelectedLine = engagements.filter((e) => {
+        if (!formData.membre_id) return false;
+        if (!formData.ligne_cotisation_id) return false;
+
+        const sameMember = Number(e.membre_id) === Number(formData.membre_id);
+        const isActive = cleanValue(e.statut) === "actif";
         const sameLine = String(e.ligne_id) === String(formData.ligne_cotisation_id);
 
         return sameMember && isActive && sameLine;
     });
 
+    // =====================================================
+    // FIX: Déterminer si la ligne sélectionnée exige un engagement
+    // =====================================================
+    const selectedLine = lignesCotisation.find(
+        (l) => String(l.id) === String(formData.ligne_cotisation_id)
+    );
+
+    const ligneEstEngagement = selectedLine?.type_ligne === "engagement";
+
+    // Le membre a-t-il au moins un engagement actif pour cette ligne ?
+    const membreAEngagementPourLigne = activeEngagementsForSelectedLine.length > 0;
+
+    // Le membre a-t-il au moins un engagement actif (toutes lignes) ?
+    const membreAEngagementGlobal = activeEngagementsForSelectedMember.length > 0;
+
+    // =====================================================
+    // FIX: Validation corrigée de l'ajout de cotisation
+    // =====================================================
     const handleAjouterCotisation = async (e: any) => {
         e.preventDefault();
 
@@ -575,23 +596,47 @@ export default function TresorierDashboard() {
             return;
         }
 
-        if (!formData.montant) {
-            alert("Veuillez saisir le montant payé.");
+        if (!formData.montant || Number(formData.montant) <= 0) {
+            alert("Veuillez saisir un montant valide.");
             return;
         }
-
-        const selectedLine = lignesCotisation.find(
-            (l) => String(l.id) === String(formData.ligne_cotisation_id)
-        );
 
         if (!selectedLine) {
             alert("Ligne de cotisation introuvable.");
             return;
         }
 
-        if (selectedLine.type_ligne === "engagement" && !formData.engagement_id) {
-            alert("Veuillez sélectionner l'engagement actif du membre.");
-            return;
+        // =====================================================
+        // FIX PRINCIPAL: Logique de validation des engagements
+        // 
+        // Si la ligne est de type "engagement":
+        //   - Si le membre a des engagements actifs pour cette ligne → obligatoire
+        //   - Si le membre n'a AUCUN engagement actif pour cette ligne → 
+        //     on autorise l'enregistrement SANS engagement (cotisation libre)
+        //     avec un avertissement
+        // =====================================================
+        if (ligneEstEngagement) {
+            if (membreAEngagementPourLigne && !formData.engagement_id) {
+                // Le membre A des engagements actifs pour cette ligne
+                // → il DOIT en sélectionner un
+                alert(
+                    "Ce membre a des engagements actifs pour cette ligne.\n" +
+                    "Veuillez sélectionner l'engagement correspondant."
+                );
+                return;
+            }
+
+            if (!membreAEngagementPourLigne && !formData.engagement_id) {
+                // Le membre N'A PAS d'engagement actif pour cette ligne
+                // → on autorise mais avec confirmation
+                const confirmer = confirm(
+                    "⚠️ Ce membre n'a aucun engagement actif pour cette ligne.\n\n" +
+                    "Le paiement sera enregistré comme cotisation libre (sans engagement lié).\n\n" +
+                    "Voulez-vous continuer ?"
+                );
+
+                if (!confirmer) return;
+            }
         }
 
         const { data, error } = await supabase.rpc("enregistrer_cotisation_generation", {
@@ -613,7 +658,7 @@ export default function TresorierDashboard() {
             return;
         }
 
-        alert("Cotisation enregistrée avec succès !");
+        alert("✅ Cotisation enregistrée avec succès !");
 
         setShowAjoutModal(false);
         resetForm();
@@ -690,7 +735,15 @@ export default function TresorierDashboard() {
     };
 
     const handleEngagementChange = (engagementId: string) => {
-        const engagement = engagements.find((e) => e.engagement_id === engagementId);
+        if (!engagementId) {
+            setFormData({
+                ...formData,
+                engagement_id: "",
+            });
+            return;
+        }
+
+        const engagement = engagements.find((e) => String(e.engagement_id) === String(engagementId));
 
         if (!engagement) {
             setFormData({
@@ -706,7 +759,7 @@ export default function TresorierDashboard() {
         setFormData({
             ...formData,
             engagement_id: engagementId,
-            ligne_cotisation_id: engagement.ligne_id,
+            ligne_cotisation_id: engagement.ligne_id || formData.ligne_cotisation_id,
             type_cotisation: "engagement",
             montant,
             notes: `Paiement engagement : ${engagement.titre}`,
@@ -723,7 +776,7 @@ export default function TresorierDashboard() {
 
         const montantValide = Number(montantInput);
 
-        if (!montantValide || montantValide <= 0) {
+        if (!Number.isFinite(montantValide) || montantValide <= 0) {
             alert("Montant invalide.");
             return;
         }
@@ -780,6 +833,20 @@ export default function TresorierDashboard() {
         return membre?.nom_complet || "Inconnu";
     };
 
+    const escapeHtml = (text: string) => {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+    };
+
+    const escapeCsv = (value: any) => {
+        const str = String(value ?? "");
+        if (str.includes(";") || str.includes("\n") || str.includes('"')) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    };
+
     const exportCotisations = () => {
         const data = cotisationsFiltered.map((c: any) => ({
             Date: formatDate(getCotisationDate(c)),
@@ -796,7 +863,7 @@ export default function TresorierDashboard() {
 
         const csv = [
             Object.keys(data[0]).join(";"),
-            ...data.map((row) => Object.values(row).join(";")),
+            ...data.map((row) => Object.values(row).map(escapeCsv).join(";")),
         ].join("\n");
 
         const blob = new Blob(["\uFEFF" + csv], {
@@ -837,14 +904,14 @@ export default function TresorierDashboard() {
                 </div>
                 <div class="content">
                     <h2>REÇU DE COTISATION</h2>
-                    <div class="field"><span class="label">Date :</span> ${formatDate(getCotisationDate(cotisation))}</div>
-                    <div class="field"><span class="label">Membre :</span> ${cotisation.membres?.nom_complet || getMembreNom(cotisation.membre_id)}</div>
-                    <div class="field"><span class="label">Génération :</span> ${user?.generation || ""}</div>
-                    ${getLigneTitre(cotisation) ? `<div class="field"><span class="label">Ligne :</span> ${getLigneTitre(cotisation)}</div>` : ""}
-                    <div class="field"><span class="label">Type :</span> ${getTypeLabel(cotisation)}</div>
-                    <div class="field"><span class="label">Montant :</span> ${formatMontant(cotisation.montant)}</div>
-                    ${cotisation.mois || cotisation.annee ? `<div class="field"><span class="label">Période :</span> ${cotisation.mois || ""} ${cotisation.annee || ""}</div>` : ""}
-                    ${getCotisationNotes(cotisation) ? `<div class="field"><span class="label">Notes :</span> ${getCotisationNotes(cotisation)}</div>` : ""}
+                    <div class="field"><span class="label">Date :</span> ${escapeHtml(formatDate(getCotisationDate(cotisation)))}</div>
+                    <div class="field"><span class="label">Membre :</span> ${escapeHtml(cotisation.membres?.nom_complet || getMembreNom(cotisation.membre_id))}</div>
+                    <div class="field"><span class="label">Génération :</span> ${escapeHtml(user?.generation || "")}</div>
+                    ${getLigneTitre(cotisation) ? `<div class="field"><span class="label">Ligne :</span> ${escapeHtml(getLigneTitre(cotisation))}</div>` : ""}
+                    <div class="field"><span class="label">Type :</span> ${escapeHtml(getTypeLabel(cotisation))}</div>
+                    <div class="field"><span class="label">Montant :</span> ${escapeHtml(formatMontant(cotisation.montant))}</div>
+                    ${cotisation.mois || cotisation.annee ? `<div class="field"><span class="label">Période :</span> ${escapeHtml((cotisation.mois || "") + " " + (cotisation.annee || ""))}</div>` : ""}
+                    ${getCotisationNotes(cotisation) ? `<div class="field"><span class="label">Notes :</span> ${escapeHtml(getCotisationNotes(cotisation))}</div>` : ""}
                 </div>
                 <div class="footer">
                     Merci pour votre contribution à la communauté
@@ -856,7 +923,7 @@ export default function TresorierDashboard() {
         const win = window.open();
 
         if (!win) {
-            alert("Impossible d'ouvrir la fenêtre d'impression.");
+            alert("Impossible d'ouvrir la fenêtre d'impression. Désactivez le bloqueur de popups.");
             return;
         }
 
@@ -1109,7 +1176,7 @@ export default function TresorierDashboard() {
                 <div className="text-center">
                     <div className="animate-spin text-4xl mb-4">⏳</div>
                     <p className="text-2xl font-black text-black">
-                        Chargement de l'espace trésorier...
+                        Chargement de l&apos;espace trésorier...
                     </p>
                 </div>
             </div>
@@ -1228,7 +1295,7 @@ export default function TresorierDashboard() {
 
                 {/* KPI */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <KpiBox icon={<DollarSign size={18} />} title="Total Sibiti" value={formatMontant(stats.totalSibity)} />
+                    <KpiBox icon={<DollarSign size={18} />} title="Total Sibiti" value={formatMontant(stats.totalSibiti)} />
                     <KpiBox icon={<CreditCard size={18} />} title="Total Mensualités" value={formatMontant(stats.totalMensualite)} />
                     <KpiBox icon={<Landmark size={18} />} title="Collecte globale" value={formatMontant(stats.totalGlobal)} />
                     <KpiBox icon={<Users size={18} />} title="Taux participation" value={`${stats.tauxParticipation.toFixed(0)}%`} />
@@ -1238,7 +1305,7 @@ export default function TresorierDashboard() {
                 <div className="bg-white border-4 border-black rounded-2xl p-6 mb-6">
                     <div className="flex justify-between mb-2">
                         <span className="font-black text-black">
-                            Progression vers l'objectif annuel
+                            Progression vers l&apos;objectif annuel
                         </span>
                         <span className="font-black text-black">
                             {stats.progression.toFixed(1)}%
@@ -1376,7 +1443,7 @@ export default function TresorierDashboard() {
                                         Aucune cotisation enregistrée
                                     </p>
                                     <p className="text-black/40 mt-2">
-                                        Cliquez sur "Nouvelle cotisation" pour commencer
+                                        Cliquez sur &quot;Nouvelle cotisation&quot; pour commencer
                                     </p>
                                 </div>
                             ) : (
@@ -1384,24 +1451,12 @@ export default function TresorierDashboard() {
                                     <table className="w-full">
                                         <thead className="bg-gray-100">
                                             <tr>
-                                                <th className="p-3 text-left font-black text-sm">
-                                                    Date
-                                                </th>
-                                                <th className="p-3 text-left font-black text-sm">
-                                                    Membre
-                                                </th>
-                                                <th className="p-3 text-left font-black text-sm">
-                                                    Ligne
-                                                </th>
-                                                <th className="p-3 text-left font-black text-sm">
-                                                    Type
-                                                </th>
-                                                <th className="p-3 text-right font-black text-sm">
-                                                    Montant
-                                                </th>
-                                                <th className="p-3 text-center font-black text-sm">
-                                                    Actions
-                                                </th>
+                                                <th className="p-3 text-left font-black text-sm">Date</th>
+                                                <th className="p-3 text-left font-black text-sm">Membre</th>
+                                                <th className="p-3 text-left font-black text-sm">Ligne</th>
+                                                <th className="p-3 text-left font-black text-sm">Type</th>
+                                                <th className="p-3 text-right font-black text-sm">Montant</th>
+                                                <th className="p-3 text-center font-black text-sm">Actions</th>
                                             </tr>
                                         </thead>
 
@@ -1423,17 +1478,16 @@ export default function TresorierDashboard() {
                                                     </td>
                                                     <td className="p-3">
                                                         <span
-                                                            className={`text-xs px-2 py-1 rounded-full font-black ${
-                                                                getCotisationType(cotisation).includes("sibity") ||
-                                                                getCotisationType(cotisation).includes("sibiti")
+                                                            className={`text-xs px-2 py-1 rounded-full font-black ${getCotisationType(cotisation).includes("sibity") ||
+                                                                    getCotisationType(cotisation).includes("sibiti")
                                                                     ? "bg-purple-100 text-purple-800"
                                                                     : getCotisationType(cotisation).includes("mensualite") ||
-                                                                      getCotisationType(cotisation).includes("mensualité")
-                                                                    ? "bg-blue-100 text-blue-800"
-                                                                    : getCotisationType(cotisation).includes("engagement")
-                                                                    ? "bg-orange-100 text-orange-800"
-                                                                    : "bg-gray-100 text-gray-800"
-                                                            }`}
+                                                                        getCotisationType(cotisation).includes("mensualité")
+                                                                        ? "bg-blue-100 text-blue-800"
+                                                                        : getCotisationType(cotisation).includes("engagement")
+                                                                            ? "bg-orange-100 text-orange-800"
+                                                                            : "bg-gray-100 text-gray-800"
+                                                                }`}
                                                         >
                                                             {getTypeLabel(cotisation)}
                                                         </span>
@@ -1555,30 +1609,14 @@ export default function TresorierDashboard() {
                                     <table className="w-full">
                                         <thead className="bg-gray-100">
                                             <tr>
-                                                <th className="p-3 text-left font-black text-sm">
-                                                    Membre
-                                                </th>
-                                                <th className="p-3 text-left font-black text-sm">
-                                                    Ligne
-                                                </th>
-                                                <th className="p-3 text-right font-black text-sm">
-                                                    Proposé
-                                                </th>
-                                                <th className="p-3 text-right font-black text-sm">
-                                                    Validé
-                                                </th>
-                                                <th className="p-3 text-right font-black text-sm">
-                                                    Payé
-                                                </th>
-                                                <th className="p-3 text-center font-black text-sm">
-                                                    Progression
-                                                </th>
-                                                <th className="p-3 text-center font-black text-sm">
-                                                    Statut
-                                                </th>
-                                                <th className="p-3 text-center font-black text-sm">
-                                                    Actions
-                                                </th>
+                                                <th className="p-3 text-left font-black text-sm">Membre</th>
+                                                <th className="p-3 text-left font-black text-sm">Ligne</th>
+                                                <th className="p-3 text-right font-black text-sm">Proposé</th>
+                                                <th className="p-3 text-right font-black text-sm">Validé</th>
+                                                <th className="p-3 text-right font-black text-sm">Payé</th>
+                                                <th className="p-3 text-center font-black text-sm">Progression</th>
+                                                <th className="p-3 text-center font-black text-sm">Statut</th>
+                                                <th className="p-3 text-center font-black text-sm">Actions</th>
                                             </tr>
                                         </thead>
 
@@ -1586,18 +1624,12 @@ export default function TresorierDashboard() {
                                             {engagements.map((e) => (
                                                 <tr key={e.engagement_id} className="border-b border-black/10">
                                                     <td className="p-3">
-                                                        <p className="font-black text-black">
-                                                            {e.nom_complet}
-                                                        </p>
+                                                        <p className="font-black text-black">{e.nom_complet}</p>
                                                         <p className="text-xs text-black/50">{e.email}</p>
-                                                        <p className="text-xs text-black/50">
-                                                            {e.telephone}
-                                                        </p>
+                                                        <p className="text-xs text-black/50">{e.telephone}</p>
                                                     </td>
 
-                                                    <td className="p-3 font-bold text-black">
-                                                        {e.titre}
-                                                    </td>
+                                                    <td className="p-3 font-bold text-black">{e.titre}</td>
 
                                                     <td className="p-3 text-right font-black text-orange-700">
                                                         {formatMontant(e.montant_propose)}
@@ -1694,34 +1726,20 @@ export default function TresorierDashboard() {
                                 <table className="w-full">
                                     <thead className="bg-gray-100">
                                         <tr>
-                                            <th className="p-3 text-left font-black text-sm">
-                                                Génération
-                                            </th>
-                                            <th className="p-3 text-left font-black text-sm">
-                                                Année
-                                            </th>
-                                            <th className="p-3 text-left font-black text-sm">
-                                                Montant
-                                            </th>
-                                            <th className="p-3 text-left font-black text-sm">
-                                                Statut BC
-                                            </th>
-                                            <th className="p-3 text-left font-black text-sm">
-                                                Statut Génération
-                                            </th>
-                                            <th className="p-3 text-center font-black text-sm">
-                                                Actions
-                                            </th>
+                                            <th className="p-3 text-left font-black text-sm">Génération</th>
+                                            <th className="p-3 text-left font-black text-sm">Année</th>
+                                            <th className="p-3 text-left font-black text-sm">Montant</th>
+                                            <th className="p-3 text-left font-black text-sm">Statut BC</th>
+                                            <th className="p-3 text-left font-black text-sm">Statut Génération</th>
+                                            <th className="p-3 text-center font-black text-sm">Actions</th>
                                         </tr>
                                     </thead>
 
                                     <tbody>
                                         {propositionsBudget.map((prop) => {
-                                            const statutGeneration =
-                                                prop.statut_chef || "en_attente";
+                                            const statutGeneration = prop.statut_chef || "en_attente";
                                             const peutRepondre =
-                                                statutGeneration === "en_attente" ||
-                                                statutGeneration === "";
+                                                statutGeneration === "en_attente" || statutGeneration === "";
 
                                             return (
                                                 <tr key={prop.id} className="border-b border-black/10">
@@ -1797,16 +1815,21 @@ export default function TresorierDashboard() {
                 </div>
             </div>
 
-            {/* Modal Ajout Cotisation */}
+            {/* =====================================================
+                FIX: Modal Ajout Cotisation - Logique engagement corrigée
+                ===================================================== */}
             {showAjoutModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6 shadow-[15px_15px_0px_0px_rgba(0,0,0,0.2)]">
+                    <div className="bg-white border-4 border-black rounded-2xl max-w-md w-full p-6 shadow-[15px_15px_0px_0px_rgba(0,0,0,0.2)] max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-black text-black">
                                 💰 Nouvelle cotisation
                             </h2>
                             <button
-                                onClick={() => setShowAjoutModal(false)}
+                                onClick={() => {
+                                    setShowAjoutModal(false);
+                                    resetForm();
+                                }}
                                 className="text-black hover:text-red-500"
                             >
                                 <X size={24} />
@@ -1814,6 +1837,7 @@ export default function TresorierDashboard() {
                         </div>
 
                         <form onSubmit={handleAjouterCotisation} className="space-y-4">
+                            {/* Membre */}
                             <div>
                                 <label className="block text-black font-black mb-1">
                                     Membre *
@@ -1826,6 +1850,8 @@ export default function TresorierDashboard() {
                                             membre_id: e.target.value,
                                             engagement_id: "",
                                             ligne_cotisation_id: "",
+                                            montant: "",
+                                            notes: "",
                                         })
                                     }
                                     className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
@@ -1840,6 +1866,7 @@ export default function TresorierDashboard() {
                                 </select>
                             </div>
 
+                            {/* Ligne de cotisation */}
                             <div>
                                 <label className="block text-black font-black mb-1">
                                     Ligne de cotisation *
@@ -1865,26 +1892,63 @@ export default function TresorierDashboard() {
                                 </p>
                             </div>
 
-                            {formData.membre_id && activeEngagementsForSelectedMember.length > 0 && (
+                            {/* =====================================================
+                                FIX: Dropdown engagement avec messages contextuels
+                                ===================================================== */}
+                            {formData.membre_id && ligneEstEngagement && (
                                 <div>
                                     <label className="block text-black font-black mb-1">
-                                        Engagement actif du membre
+                                        🤝 Engagement actif du membre
                                     </label>
-                                    <select
-                                        value={formData.engagement_id}
-                                        onChange={(e) => handleEngagementChange(e.target.value)}
-                                        className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
-                                    >
-                                        <option value="">-- Aucun engagement spécifique --</option>
-                                        {activeEngagementsForSelectedMember.map((e) => (
-                                            <option key={e.engagement_id} value={e.engagement_id}>
-                                                {e.titre} — Reste : {formatMontant(e.reste_a_payer)}
-                                            </option>
-                                        ))}
-                                    </select>
+
+                                    {activeEngagementsForSelectedLine.length > 0 ? (
+                                        <>
+                                            <select
+                                                value={formData.engagement_id}
+                                                onChange={(e) => handleEngagementChange(e.target.value)}
+                                                className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                            >
+                                                <option value="">-- Sélectionner un engagement --</option>
+                                                {activeEngagementsForSelectedLine.map((e) => (
+                                                    <option key={e.engagement_id} value={e.engagement_id}>
+                                                        {e.titre} — Reste : {formatMontant(e.reste_a_payer)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-[10px] text-orange-600 font-bold mt-1">
+                                                ⚠️ Ce membre a des engagements actifs. Sélectionnez-en un.
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-3">
+                                            <p className="text-xs font-black text-yellow-800">
+                                                ℹ️ Ce membre n&apos;a aucun engagement actif pour cette ligne.
+                                            </p>
+                                            <p className="text-[10px] text-yellow-700 mt-1">
+                                                Le paiement sera enregistré comme cotisation libre (sans engagement lié).
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
+                            {/* Engagement hors ligne engagement (si le membre a des engagements actifs sur d'autres lignes) */}
+                            {formData.membre_id &&
+                                !ligneEstEngagement &&
+                                membreAEngagementGlobal && (
+                                    <div className="bg-blue-50 border-2 border-blue-400 rounded-xl p-3">
+                                        <p className="text-xs font-black text-blue-800">
+                                            💡 Ce membre a {activeEngagementsForSelectedMember.length} engagement(s)
+                                            actif(s) sur d&apos;autres lignes.
+                                        </p>
+                                        <p className="text-[10px] text-blue-700 mt-1">
+                                            Si vous souhaitez enregistrer un paiement d&apos;engagement,
+                                            sélectionnez la ligne correspondante.
+                                        </p>
+                                    </div>
+                                )}
+
+                            {/* Type de cotisation */}
                             <div>
                                 <label className="block text-black font-black mb-1">
                                     Type de cotisation *
@@ -1902,6 +1966,7 @@ export default function TresorierDashboard() {
                                 </select>
                             </div>
 
+                            {/* Montant */}
                             <div>
                                 <label className="block text-black font-black mb-1">
                                     Montant (FCFA) *
@@ -1916,15 +1981,28 @@ export default function TresorierDashboard() {
                                         })
                                     }
                                     className="w-full p-3 border-4 border-black rounded-xl font-black text-black bg-white focus:bg-yellow-50 outline-none"
+                                    min="1"
                                     required
                                 />
+
+                                {/* FIX: Montant info contextuel pour engagement */}
+                                {formData.engagement_id && (() => {
+                                    const eng = engagements.find(
+                                        (e) => String(e.engagement_id) === String(formData.engagement_id)
+                                    );
+                                    if (!eng) return null;
+                                    return (
+                                        <p className="text-[10px] text-green-700 font-bold mt-1">
+                                            Reste à payer sur cet engagement : {formatMontant(eng.reste_a_payer)}
+                                        </p>
+                                    );
+                                })()}
                             </div>
 
+                            {/* Mois / Année */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-black font-black mb-1">
-                                        Mois
-                                    </label>
+                                    <label className="block text-black font-black mb-1">Mois</label>
                                     <input
                                         type="text"
                                         value={formData.mois}
@@ -1935,9 +2013,7 @@ export default function TresorierDashboard() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-black font-black mb-1">
-                                        Année
-                                    </label>
+                                    <label className="block text-black font-black mb-1">Année</label>
                                     <input
                                         type="number"
                                         value={formData.annee}
@@ -1949,10 +2025,9 @@ export default function TresorierDashboard() {
                                 </div>
                             </div>
 
+                            {/* Date */}
                             <div>
-                                <label className="block text-black font-black mb-1">
-                                    Date
-                                </label>
+                                <label className="block text-black font-black mb-1">Date</label>
                                 <input
                                     type="date"
                                     value={formData.date_paiement}
@@ -1966,10 +2041,9 @@ export default function TresorierDashboard() {
                                 />
                             </div>
 
+                            {/* Notes */}
                             <div>
-                                <label className="block text-black font-black mb-1">
-                                    Notes
-                                </label>
+                                <label className="block text-black font-black mb-1">Notes</label>
                                 <textarea
                                     value={formData.notes}
                                     onChange={(e) =>
@@ -1984,10 +2058,14 @@ export default function TresorierDashboard() {
                                 />
                             </div>
 
+                            {/* Boutons */}
                             <div className="flex gap-3 pt-4">
                                 <button
                                     type="button"
-                                    onClick={() => setShowAjoutModal(false)}
+                                    onClick={() => {
+                                        setShowAjoutModal(false);
+                                        resetForm();
+                                    }}
                                     className="flex-1 bg-gray-200 py-3 rounded-xl font-black"
                                 >
                                     Annuler
@@ -2047,9 +2125,8 @@ export default function TresorierDashboard() {
                             />
                             <DetailLine
                                 label="Période"
-                                value={`${selectedCotisation.mois || "—"} ${
-                                    selectedCotisation.annee || ""
-                                }`}
+                                value={`${selectedCotisation.mois || "—"} ${selectedCotisation.annee || ""
+                                    }`}
                             />
                             <DetailLine
                                 label="Notes"
@@ -2179,9 +2256,7 @@ function KpiBox({
         <div className="bg-white border-4 border-black rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-2">
                 {icon}
-                <p className="text-xs font-black uppercase text-black/50">
-                    {title}
-                </p>
+                <p className="text-xs font-black uppercase text-black/50">{title}</p>
             </div>
             <p className="text-xl font-black text-black">{value}</p>
         </div>
@@ -2200,9 +2275,8 @@ function TabButton({
     return (
         <button
             onClick={onClick}
-            className={`px-6 py-3 font-black uppercase rounded-t-2xl ${
-                active ? "bg-black text-white" : "bg-gray-100 text-black"
-            }`}
+            className={`px-6 py-3 font-black uppercase rounded-t-2xl ${active ? "bg-black text-white" : "bg-gray-100 text-black"
+                }`}
         >
             {children}
         </button>
